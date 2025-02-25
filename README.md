@@ -21,7 +21,7 @@ Main menu (automatically generated based on entities)
 Alerts
 ![](screenshots/mensagemDeInformacao.png)
 
-Quick search views 
+Quick search views (Win+R like) 
 ![](screenshots/buscadorTelas.png)
 
 Snap layout
