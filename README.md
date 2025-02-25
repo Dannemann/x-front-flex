@@ -9,7 +9,7 @@ Search on many-to-one associations with conditionals 'and', 'or', 'like', etc
 Quick search on many-to-one associations
 ![](screenshots/buscaDeMuitosParaUmRapido.png)
 
-Quick search on table (including regular expressions)
+Quick search on table (including regular expressions - matches in red)
 ![](screenshots/cadastroBanco.png)
 
 Validation (automatically generated based on JPA annotations)
