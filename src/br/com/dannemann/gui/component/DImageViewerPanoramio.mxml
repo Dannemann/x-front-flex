@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:mx="library://ns.adobe.com/flex/mx"
+	implements="br.com.dannemann.gui.component.DComponent">
+	<fx:Script>
+		<![CDATA[
+			import br.com.dannemann.gui.domain.StrConsts;
+			import br.com.dannemann.gui.component.input.complex.DFileUploader;
+			import br.com.dannemann.gui.controller.DGUIServiceProxy;
+			import br.com.dannemann.gui.controller.DSession;
+
+			[Bindable] public var _imagesURLs:Array;
+
+			public function loadDFileUploaderFiles(dFileUploader:DFileUploader):void
+			{
+				if (DSession._tenant)
+					DGUIServiceProxy.getOnEnterpriseHomeFolder(
+						dFileUploader._destination,
+						function (returnObj:Array):void
+						{
+							const returnObjLength:int = returnObj.length;
+							for (var i:int = 0; i < returnObjLength; i++)
+								returnObj[i] = DSession._applicationDomain + "/" + dFileUploader._enterpriseDestination + "/" + returnObj[i];
+
+							_imagesURLs = returnObj;
+						});
+			}
+
+			private function photoSelected():void
+			{
+				currentState = stateDetail.name;
+
+				/* const selectedPhoto:Object = thumbnails.selectedItem;
+
+				photo.source = selectedPhoto.photo_file_url;
+				photoTitle.text = selectedPhoto.photo_title;
+				photoLocation.text = "Lat: " + selectedPhoto.latitude + " Long: " + selectedPhoto.longitude; */
+
+				photo.source = thumbnails.selectedItem;
+			}
+
+			public function clear():void
+			{
+				currentState = stateThumbnails.name;
+
+				if (thumbnails)
+					thumbnails.dataProvider = [];
+			}
+
+			override public function setFocus():void
+			{
+				if (currentState == stateThumbnails.name)
+				{
+					if (thumbnails)
+						callLater(thumbnails.setFocus);
+					else
+						super.setFocus();
+				}
+				else if (currentState == stateDetail.name)
+				{
+					if (back)
+						callLater(back.setFocus);
+					else
+						super.setFocus();
+				}
+				else
+					throw new Error(" ### DImageViewerPanoramio.setFocus: Erro inesperado. Contate o suporte técnico!");
+			}
+		]]>
+	</fx:Script>
+
+	<s:layout>
+		<s:BasicLayout/>
+	</s:layout>
+
+	<s:states>
+		<s:State id="stateThumbnails" name="Thumbnails" />
+		<s:State id="stateDetail" name="Detail" />
+	</s:states>
+
+	<s:transitions>
+		<s:Transition>
+			<mx:Blur target="{this}" duration="500" blurYFrom="20.0" blurYTo="1.0" blurXFrom="20.0" blurXTo="1.0" />
+		</s:Transition>
+	</s:transitions>
+
+	<mx:TileList includeIn="Thumbnails" id="thumbnails" dataProvider="{_imagesURLs}" doubleClickEnabled="true" bottom="0" left="0" right="0" top="0" itemDoubleClick="photoSelected()">
+		<mx:itemRenderer>
+			<fx:Component>
+				<mx:Canvas width="245" height="175">
+					<mx:Image source="{data}" bottom="10" top="10" left="10" right="10" />
+					<!--<mx:Label text="{data.photo_title.length > 30 ? data.photo_title.substr(0, 27) + '...' : data.photo_title}" top="10" left="10" />-->
+				</mx:Canvas>
+			</fx:Component>
+		</mx:itemRenderer>
+	</mx:TileList>
+
+	<mx:Image includeIn="Detail" id="photo" scaleContent="true" bottom="32" left="10" right="10" top="10" />
+	<!--<mx:Label includeIn="Detail" id="photoTitle" text="Title" bottom="36" left="10" />
+	<mx:Label includeIn="Detail" id="photoLocation" text="Position" bottom="10" left="10" />-->
+	<mx:Button includeIn="Detail" id="back" label="{StrConsts.getRMString(75)}" bottom="10" right="10" click="{currentState = stateThumbnails.name}" />
+
+</s:Group>

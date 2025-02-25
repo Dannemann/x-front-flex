@@ -1,0 +1,10 @@
+.settings
+.model
+bin
+bin-debug
+bin-release
+html-template
+.actionScriptProperties
+.flexLibProperties
+.flexProperties
+.project

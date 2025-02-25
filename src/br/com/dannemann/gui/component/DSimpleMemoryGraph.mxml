@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" creationComplete="beginGraphing(event);"
+		 minHeight="75" minWidth="150">
+	
+	<fx:Script>
+		<![CDATA[
+			
+			//--------------------------------------------------------------------------
+			//
+			//  Variables
+			//
+			//--------------------------------------------------------------------------
+			private var timer:Timer;
+			
+			private var memPoints:Vector.<Number>;
+			private var memPointsChanged:Boolean = false;
+			private var memPeak:Number = 0;
+			
+			private var currIndex:Number = 0;
+			private const TO_MB:Number = 1/1048576;
+			
+			//--------------------------------------------------------------------------
+			//
+			//  Properties
+			//
+			//--------------------------------------------------------------------------
+			
+			private var _frequency:Number = 1000;
+			private var frequencyChanged:Boolean = false;
+			
+			/**
+			 *  The time between pinging System.totalMemory in ms.
+			 *  
+			 *  @default 1000
+			 */
+			public function get frequency():Number
+			{
+				return _frequency;
+			}
+			
+			public function set frequency(value:Number):void
+			{
+				if (_frequency == value)
+					return;
+				
+				_frequency = value;
+				
+				frequencyChanged = true;
+				invalidateProperties();
+			}
+			
+			private var _numPoints:Number = 100;
+			private var numPointsChanged:Boolean = false;
+			
+			/**
+			 *  The number of points graphed.
+			 * 
+			 *  @default 100
+			 */
+			public function get numPoints():Number
+			{
+				return _numPoints;
+			}
+			
+			public function set numPoints(value:Number):void
+			{
+				if (_numPoints == value)
+					return;
+				
+				_numPoints = value;
+				
+				numPointsChanged = true;
+				invalidateProperties();
+			}
+			
+			//--------------------------------------------------------------------------
+			//
+			//  Methods
+			//
+			//--------------------------------------------------------------------------
+			
+			override protected function commitProperties():void
+			{
+				super.commitProperties();
+				
+				if (frequencyChanged)
+				{
+					if (timer)
+					{
+						timer.stop();
+						timer.delay = _frequency;
+						timer.start();
+					}
+					
+					frequencyChanged = false;
+				}
+				
+				if (numPointsChanged)
+				{
+					if (memPoints)
+					{
+						// Create new length vector
+						var tempPoints:Vector.<Number> = new Vector.<Number>(numPoints, true);
+						var j:int = tempPoints.length-1;
+						var i:int = memPoints.length-1;
+						while (j >= 0 && i >= 0)
+						{
+							tempPoints[j] = memPoints[i];
+							j--;
+							i--;
+						}
+						
+						memPoints = tempPoints;
+					}
+				}
+			}
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth, unscaledHeight);
+				
+				// Only update graph when things have kicked off (to avoid RTE's)
+				if (timer)
+					drawPath();
+			}
+			
+			private function beginGraphing(event:Event):void
+			{
+				memPoints = new Vector.<Number>(numPoints, true);
+				timer = new Timer(_frequency);
+				timer.addEventListener(TimerEvent.TIMER, function(event:TimerEvent):void { addMemPoint(); }, false, 0, false);
+				timer.start();
+			}
+			
+			/**
+			 *  Adds one memory point to the graph (removes the oldest point as well).
+			 *  Updates the current memory label. Keeps track of the highest memory seen
+			 *  so far.
+			 */
+			private function addMemPoint():void
+			{
+				// Optimizations:
+				//      use circular array.
+				// Enhancements:
+				//      allow different formats for peak memory.
+				
+				var i:int;
+				
+				for (i = 0; i < memPoints.length - 1; i++)
+				{
+					memPoints[i] = memPoints[i+1];
+				}
+				
+				memPoints[i] = System.totalMemory;
+				if (memPoints[i] > memPeak)
+				{
+					memPeak = memPoints[i];
+					maxMemLabel.text = String((memPeak*TO_MB).toFixed(2)) + "mb";
+				}
+				
+				currMemLabel.text = "Current Mem: " + String((memPoints[i]*TO_MB).toFixed(2)) + "mb";
+				
+				invalidateDisplayList();
+			}
+			
+			/**
+			 *  Updates the string for the graphLine path to reflect the current memory
+			 *  array.
+			 */
+			private function drawPath():void
+			{
+				// Optimizations:
+				//      update String sparingly
+				//      combine points that are along the same line (same y values)
+				var pstr:String = "";
+				
+				var height:Number = graphBorder.height - graphBorderStroke.weight;
+				var width:Number = graphBorder.width - graphBorderStroke.weight;
+				graphLineGroup.setActualSize(width, height);
+				graphLineGroup.setLayoutBoundsPosition(graphBorderStroke.weight, graphBorderStroke.weight);
+				
+				var xgap:Number = width/(numPoints - 1);
+				var x:Number = 0;
+				var y:Number;
+				var coord:String;
+				var memratio:Number = height/memPeak;
+				
+				for (var i:int = 0; i < memPoints.length; i++)
+				{
+					// Calculate y coordinate based on ratio.
+					// Use height-1 to ensure that everything stays within the graphLineGroup.
+					y = (height - 1) - memPoints[i]*memratio + graphBorderStroke.weight;
+					
+					// Limit y coord to top and bottom of graph
+					if (y > height - 1)
+						y = height - 1;
+					if (y < 0)
+						y = 0;
+					
+					coord = x + " " + y + " ";
+					
+					if (i == 0)
+						pstr += "M " + coord;
+					else
+						pstr += "L " + coord;
+					
+					x += xgap;
+				}
+				
+				graphLine.data = pstr;
+				
+				// Uncomment line below to see all memory points (in KB)
+				// trace(memPoints);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	
+	<s:HGroup id="graph" left="0" right="0" top="0" bottom="12" >
+		
+		<!-- Graph Group -->
+		<s:Group id="graphGroup" width="100%" height="100%">
+			<s:Rect id="graphBorder" left="0" right="0" top="0" bottom="0">
+				<s:stroke>
+					<s:SolidColorStroke id="graphBorderStroke" color="0xCCCCCC" weight="1" />
+				</s:stroke>
+			</s:Rect>
+			<s:Group id="graphLineGroup" includeInLayout="false">
+				<s:Path id="graphLine">
+					<s:stroke>
+						<s:SolidColorStroke color="0x990000" weight="1" />
+					</s:stroke>
+				</s:Path>
+			</s:Group>
+		</s:Group>
+		
+		<!-- Labels -->
+		<s:Label id="maxMemLabel" top="1" right="1" left="1" fontSize="10" />
+		
+	</s:HGroup>
+	
+	<!-- Current Memory -->
+	<s:Label id="currMemLabel" bottom="1" left="1" fontSize="10" />
+	
+</s:Group>

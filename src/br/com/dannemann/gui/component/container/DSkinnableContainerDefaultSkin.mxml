@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Skin xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Metadata>
+		[HostComponent("br.com.dannemann.gui.component.container.DSkinnableContainer")]
+	</fx:Metadata>
+
+	<s:states>
+		<s:State name="disabled" />
+		<s:State name="normal" />
+	</s:states>
+	
+	<s:Rect left="0" right="0" top="0" bottom="0" radiusX="7" radiusY="7" >
+		<s:stroke>
+			<s:SolidColorStroke color="#555555" />
+		</s:stroke>
+		<s:fill>
+			<s:LinearGradient rotation="90" >
+				<s:GradientEntry color="0xeeeeee" />
+				<s:GradientEntry color="0xfdfdfd" />
+			</s:LinearGradient>
+		</s:fill>    		
+	</s:Rect>
+	
+	<!-- Note: setting the minimum size to 0 here so that changes to the host component's
+	size will not be thwarted by this skin part's minimum size.   This is a compromise,
+	more about it here: http://bugs.adobe.com/jira/browse/SDK-21143 -->
+	<!--- @copy spark.components.SkinnableContainer#contentGroup -->
+	<s:Group id="contentGroup" left="0" right="0" top="0" bottom="0" minWidth="0" maxWidth="400" minHeight="0">
+		<s:layout>
+			<s:HorizontalLayout
+				horizontalAlign="left" verticalAlign="middle"
+				paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10" />
+		</s:layout>
+	</s:Group>
+	
+	<s:filters>
+		<s:DropShadowFilter blurX="4" blurY="4" alpha="0.32" distance="3" angle="45" knockout="false" />
+	</s:filters>
+</s:Skin>

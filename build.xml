@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<project name="xfront-flex" default="deploy" basedir=".">
+	<target name="deploy" depends="buildLocales">
+		<echo>### ${ant.project.name}: deploy</echo>
+	</target>
+
+	<target name="buildLocales">
+		<echo>### ${ant.project.name}: buildLocales</echo>
+		<parallel threadCount="2">
+			<compileLocale locale="pt_BR" />
+			<compileLocale locale="en_US" />
+		</parallel>
+	</target>
+
+	<!-- ##################### -->
+	<!-- ### Localization: ### -->
+	<!-- ##################### -->
+
+	<property name="FLEX_HOME" value="D:/Dev/Platforms/Flex/AppsP/flex-sdk-4.16.0" /> <!-- ##### UPDATE ME! ##### -->
+
+	<taskdef resource="flexTasks.tasks" classpath="${FLEX_HOME}/ant/lib/flexTasks.jar" />
+
+	<macrodef name="compileLocale">
+		<attribute name="locale" />
+		<sequential>
+			<!-- Create the Flex Home directory for the language in question. This is necessary to compensate for a bug in pre-3.2 releases of mxmlc. -->
+			<!--<mkdir dir="${FLEX_HOME}/frameworks/locale/@{locale}"/>-->
+
+			<mxmlc output="${basedir}/locale/@{locale}.swf">
+				<locale>@{locale}</locale>
+				<source-path path-element="${basedir}/locale/{locale}"/>
+				<include-resource-bundles>xfront_flex_locale</include-resource-bundles>
+				<source-path path-element="${FLEX_HOME}/frameworks"/>
+			</mxmlc>
+		</sequential>
+	</macrodef>
+</project>

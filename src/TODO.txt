@@ -1,0 +1,1 @@
+DConditionalForm = utilizar parameter binding pq se eu pesquisar ' da pau e pode acontecer sql injection.

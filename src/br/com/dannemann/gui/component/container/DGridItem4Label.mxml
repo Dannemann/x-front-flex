@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:GridItem xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:mx="library://ns.adobe.com/flex/mx"
+	implements="br.com.dannemann.gui.component.container.DContainer"
+	preinitialize="preinitializeHandler(event)">
+	<fx:Script>
+		<![CDATA[
+			import br.com.dannemann.gui.domain.StrConsts;
+
+			import mx.events.FlexEvent;
+
+			import spark.layouts.HorizontalAlign;
+			import spark.layouts.VerticalAlign;
+
+			private function preinitializeHandler(event:FlexEvent):void
+			{
+				focusEnabled = false;
+				setStyle(StrConsts._FLEX_STYLE_PROPERTY_VERTICAL_ALIGN, VerticalAlign.BOTTOM);
+				setStyle(StrConsts._FLEX_STYLE_PROPERTY_HORIZONTAL_ALIGN, HorizontalAlign.RIGHT);
+			}
+		]]>
+	</fx:Script>
+</mx:GridItem>

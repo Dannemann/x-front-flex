@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Grid
+	xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:mx="library://ns.adobe.com/flex/mx"
+	xmlns:container="br.com.dannemann.gui.component.container.*" xmlns:input="br.com.dannemann.gui.component.input.*"
+	implements="br.com.dannemann.gui.component.input.DInput, br.com.dannemann.gui.component.validation.RequirableComponent"
+	width="100%" xmlns:brazil="br.com.dannemann.gui.component.addressing.brazil.*">
+
+	<fx:Script>
+		<![CDATA[
+			import mx.events.ValidationResultEvent;
+			
+			import br.com.dannemann.gui.component.DCrudToolbar;
+			import br.com.dannemann.gui.component.DNotificator;
+			import br.com.dannemann.gui.controller.BlazeDs;
+			import br.com.dannemann.gui.domain.StrConsts;
+			import br.com.dannemann.gui.util.DUtilValidator;
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Fields:
+
+			public static const _VALIDATION_MODE_ALL_FIELDS_REQUIRED:String = "AllFieldsRequired";
+			public static const _VALIDATION_MODE_ALL_FIELDS_REQUIRED_BUT_CEP:String = "AllFieldsRequiredButCEP";
+			public static const _VALIDATION_MODE_NO_FIELDS_REQUIRED:String = "NoFieldsRequired";
+
+			[Bindable] public var _validateCEPNumber:Boolean = true;
+			public var _blazeDS:BlazeDs = new BlazeDs();
+
+			public var _validationMode:String = _VALIDATION_MODE_NO_FIELDS_REQUIRED;
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Overrides:
+
+			//------------------------------------------------------------------
+			// DIGUIInput implementation:
+
+			public function get text():String
+			{
+//				return inputCEP.text;
+				return "";
+			}
+
+			public function set text(value:String):void
+			{
+//				inputCEP.text = value;
+			}
+
+			override public function setFocus():void
+			{
+				inputCEP.setFocus();
+			}
+
+			public function clean():void
+			{
+				_blazeDS.cancelOperation(inputCEP);
+
+//				inputCEP.clean();
+
+				inputUF.text = "";
+				inputCity.text = "";
+				inputStreet.text = "";
+				inputNeighborhood.text = "";
+				inputNumber.text = "";
+				inputComplement.text = "";
+			}
+
+			// TODO: Using this method somewhere?
+			public function clean2():void
+			{
+				_blazeDS.cancelOperation(inputCEP);
+
+				inputUF.text = "";
+				inputCity.text = "";
+				inputStreet.text = "";
+				inputNeighborhood.text = "";
+				inputNumber.text = "";
+				inputComplement.text = "";
+			}
+
+			public function dispose():void
+			{
+			}
+
+			//------------------------------------------------------------------
+			// ValidatableComponent implementation:
+
+			public function get _required():Boolean
+			{
+				throw Error(" ### DAddressInputs.get._required: Não utilize esta propriedade. As validações deste componente são realizadas através do modo de validação. Você pode ajustar o modo desejado através do método \"setValidationMode(validationMode:String):void\". Todos os modos de validação possíveis são representados nesta classe através de constantes públicas e estáticas. Consulte a documentação para obter mais detalhes.");
+			}
+
+			public function set _required(required:Boolean):void
+			{
+				throw Error(" ### DAddressInputs.set._required: Não utilize esta propriedade. As validações deste componente são realizadas através do modo de validação. Você pode ajustar o modo desejado através do método \"setValidationMode(validationMode:String):void\". Todos os modos de validação possíveis são representados nesta classe através de constantes públicas e estáticas. Consulte a documentação para obter mais detalhes.");
+			}
+
+			public function initializeValidator():void
+			{
+				throw Error(" ### DAddressInputs.initializeValidator: Não utilize este método. As validações deste componente são realizadas através do modo de validação. Você pode ajustar o modo desejado através do método \"setValidationMode(validationMode:String):void\". Todos os modos de validação possíveis são representados nesta classe através de constantes públicas e estáticas. Consulte a documentação para obter mais detalhes.");
+			}
+			
+			public function enableValidators(value:Boolean):void
+			{
+			}
+
+			public function validateInput(value:Object=null):ValidationResultEvent
+			{
+				return new ValidationResultEvent(ValidationResultEvent.VALID);
+			}
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Public interface:
+
+			public function doValidationOnAllFields():void
+			{
+//				inputCEP.validate();
+				inputUF.validateInput();
+				inputCity.validateInput();
+				inputStreet.validateInput();
+				inputNeighborhood.validateInput();
+				inputNumber.validateInput();
+				inputComplement.validateInput();
+			}
+
+			public function setValidationMode(validationMode:String):void
+			{
+				_validationMode = validationMode;
+
+				if (_validationMode == _VALIDATION_MODE_ALL_FIELDS_REQUIRED)
+				{
+//					inputCEP._required = true;
+					inputUF._required = true;
+					inputCity._required = true;
+					inputStreet._required = true;
+					inputNeighborhood._required = true;
+				}
+				else if (_validationMode == _VALIDATION_MODE_ALL_FIELDS_REQUIRED_BUT_CEP)
+				{
+					inputUF._required = true;
+					inputCity._required = true;
+					inputStreet._required = true;
+					inputNeighborhood._required = true;
+				}
+				else if (_validationMode == _VALIDATION_MODE_NO_FIELDS_REQUIRED)
+				{
+//					inputCEP._required = false;
+					inputUF._required = false;
+					inputCity._required = false;
+					inputStreet._required = false;
+					inputNeighborhood._required = false;
+				}
+			}
+
+			public function getInputsForValidation():Array
+			{
+				if (_validationMode == _VALIDATION_MODE_ALL_FIELDS_REQUIRED)
+					return [ inputCEP, inputUF, inputCity, inputStreet, inputNeighborhood, inputNumber, inputComplement ];
+				else if (_validationMode == _VALIDATION_MODE_NO_FIELDS_REQUIRED)
+					return null;
+				else
+					throw new Error(" ### Nenhum modo de validação definido para o componente DAddressInputs.");
+			}
+
+			public function addInputsToDCRUDToolBarValidation(_dCRUDToolBar:DCrudToolbar):void
+			{
+//				_dCRUDToolBar.addInput("enderecoCep", inputCEP);
+				_dCRUDToolBar.addInput("enderecoUf", inputUF);
+				_dCRUDToolBar.addInput("enderecoCidade", inputCity);
+				_dCRUDToolBar.addInput("enderecoLogradouro", inputStreet);
+				_dCRUDToolBar.addInput("enderecoNumero", inputNumber);
+				_dCRUDToolBar.addInput("enderecoBairro", inputNeighborhood);
+				_dCRUDToolBar.addInput("enderecoComplemento", inputComplement);
+			}
+
+//			public function enableInputs():void
+//			{
+//				inputCEP.enabled = true;
+//				inputCity.enabled = true;
+//				inputNeighborhood.enabled = true;
+//				inputStreet.enabled = true;
+//				inputUF.enabled = true;
+//			}
+//
+//			public function disableInputs():void
+//			{
+//				inputCEP.enabled = false;
+//				inputCity.enabled = false;
+//				inputNeighborhood.enabled = false;
+//				inputStreet.enabled = false;
+//				inputUF.enabled = false;
+//			}
+
+	
+
+			public function populateInputs4CepSearch(addressVo:Object):void
+			{
+				inputStreet.text = addressVo.logradouro;
+				inputNeighborhood.text = addressVo.bairro;
+				inputCity.text = addressVo.localidade;
+				inputUF.text = addressVo.uf;
+
+				doValidationOnAllFields();
+			}
+			
+			
+			
+			
+			
+			
+			
+			
+			private function cepSearchSuccess(event:Event):void 
+			{
+				const obj:Object = JSON.parse(event.target.data);
+				
+				if (obj.erro)
+					DNotificator.show("CEP NAO ENCONTRADO!"); // TODO: WORK ON THIS.
+				else
+					populateInputs4CepSearch(obj);
+			}
+			
+			
+			
+			
+			
+
+			//------------------------------------------------------------------
+		]]>
+	</fx:Script>
+
+	<mx:GridRow width="100%">
+		<container:DGridItem horizontalAlign="right">
+			<s:Label text="{StrConsts._STR_CEP}:" />
+		</container:DGridItem>
+		<container:DGridItem horizontalAlign="right" width="100%">
+			<!--<brazil:DTextInputCep id="inputCEP" _description="{StrConsts._STR_CEP}" _enableOnlineSearch="true" _parentDAddressForm="{this}" _validateCEPNumber="{_validateCEPNumber}" />-->
+			<brazil:DTextInputCepSearch id="inputCEP"  />
+			<s:Label text="{StrConsts._STR_UF}:" />
+			<!--<input:DTextInput id="inputUF" _description="{StrConsts._STR_UF}" maxChars="2" width="30" />-->
+			<brazil:DDropDownListUf id="inputUF" width="30%" abbreviatedLabels="true" />
+			<s:Label text="{StrConsts.getRMString(81)}:" />
+			<input:DTextInput id="inputCity" maxChars="50" width="70%" />
+		</container:DGridItem>
+	</mx:GridRow>
+	<mx:GridRow width="100%">
+		<container:DGridItem horizontalAlign="right">
+			<s:Label text="{StrConsts.getRMString(82)}:" />
+		</container:DGridItem>
+		<container:DGridItem width="100%">
+			<input:DTextInput id="inputStreet" maxChars="100" width="60%" />
+			<s:Label text="{StrConsts.getRMString(83)}:" />
+			<input:DTextInput id="inputNeighborhood" maxChars="50" width="40%" />
+		</container:DGridItem>
+	</mx:GridRow>
+	<mx:GridRow width="100%">
+		<container:DGridItem horizontalAlign="right">
+			<s:Label text="{StrConsts.getRMString(86)}:" />
+		</container:DGridItem>
+		<container:DGridItem horizontalAlign="right" width="100%">
+			<input:DTextInput id="inputNumber" maxChars="10" width="60" />
+			<s:Label text="{StrConsts.getRMString(84)}:" />
+			<input:DTextInput id="inputComplement" maxChars="255" width="100%" />
+		</container:DGridItem>
+	</mx:GridRow>
+
+</mx:Grid>

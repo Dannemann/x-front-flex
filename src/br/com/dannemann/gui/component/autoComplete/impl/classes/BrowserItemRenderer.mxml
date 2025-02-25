@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Label xmlns:mx="http://www.adobe.com/2006/mxml">
+	<mx:Script>
+		<![CDATA[
+			private var _selectedItems:Array;
+
+			private const strColor:String = "color";
+			private const colorDisabledText:String = "#999999";
+
+			public function set selectedItems(value:Array):void
+			{
+				_selectedItems = value;
+			}
+
+			override public function set data(item:Object):void
+			{
+				super.data = item;
+
+				if (item && _selectedItems && _selectedItems.indexOf(item) >= 0)
+//					setStyle(strColor, Consts.COLOR_TEXT_DISABLED);
+					setStyle(strColor, colorDisabledText);
+				else
+					clearStyle(strColor);
+			}
+		]]>
+	</mx:Script>
+</mx:Label>

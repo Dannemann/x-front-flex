@@ -1,0 +1,949 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:HGroup xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:mx="library://ns.adobe.com/flex/mx"
+	xmlns:component="br.com.dannemann.gui.component.*"
+	implements="mx.managers.IFocusManagerComponent, br.com.dannemann.gui.component.input.DInput"
+	enabled="true" enabled.stateLoadingImage="false"
+	horizontalAlign="left" verticalAlign="bottom">
+
+	<fx:Metadata>
+		[Event(name="onLoading", type="br.com.dannemann.gui.event.DLoadEvent")]
+		[Event(name="onLoaded", type="br.com.dannemann.gui.event.DLoadEvent")]
+		[Event(name="onLoadIOError", type="br.com.dannemann.gui.event.DLoadEvent")]
+		[Event(name="onLoadSecurityError", type="br.com.dannemann.gui.event.DLoadEvent")]
+
+		[Event(name="onExcluding", type="br.com.dannemann.gui.event.DLoadEvent")]
+		[Event(name="onExcluded", type="br.com.dannemann.gui.event.DLoadEvent")]
+
+		[Event(name="uploadComplete", type="flash.events.Event")]
+		[Event(name="uploadProgress", type="flash.events.ProgressEvent")]
+		[Event(name="uploadCancel", type="flash.events.Event")]
+		[Event(name="uploadIOError", type="flash.events.IOErrorEvent")]
+		[Event(name="uploadSecurityError", type="flash.events.SecurityErrorEvent")]
+	</fx:Metadata>
+
+	<fx:Script>
+		<![CDATA[
+			import br.com.dannemann.gui.domain.StrConsts;
+			import br.com.dannemann.gui.component.DNotificator;
+			import br.com.dannemann.gui.component.DPrompt;
+			import br.com.dannemann.gui.controller.BlazeDs;
+			import br.com.dannemann.gui.controller.DGUIServiceProxy;
+			import br.com.dannemann.gui.controller.DSession;
+			import br.com.dannemann.gui.controller.ServerVarsDecoder;
+			import br.com.dannemann.gui.crypto.MD5;
+			import br.com.dannemann.gui.event.DLoadEvent;
+			import br.com.dannemann.gui.event.DUploadDownloadEvent;
+			import br.com.dannemann.gui.library.DIconLibrary;
+			import br.com.dannemann.gui.library.DIconLibrary128;
+			import br.com.dannemann.gui.util.DUtilFile;
+			import br.com.dannemann.gui.util.DUtilFocus;
+			import br.com.dannemann.gui.util.DUtilUpload;
+			
+			import mx.containers.TitleWindow;
+			import mx.core.FlexGlobals;
+			import mx.core.UIComponent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.StringUtil;
+			
+			import spark.components.Group;
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Fields:
+
+			public var _applicationDomain:String;
+			public var _servletName:String;
+
+			public var destination:String;
+			public function get _destination():String
+			{
+				if (!destination)
+					throw new Error(StrConsts.getRMString2("500190"));
+
+				var newDestination:String = destination;
+
+				if (_relatedObject)
+					if (ServerVarsDecoder.hasNamedDVarWithin(destination, "this"))
+					{
+						const regExp:RegExp = new RegExp("\\$this{.+}", "is");
+						const values:Array = ServerVarsDecoder.getNamedDVarValues(destination, "this");
+						const valuesLength:int = values.length;
+
+						for (var i:int = 1; i < valuesLength; i++)
+							newDestination = newDestination.replace(regExp, _relatedObject[values[i]])
+					}
+
+				return newDestination;
+			}
+			public function get _enterpriseDestination():String
+			{
+				DSession.checkEnterprise();
+				return "enterprise/" + DSession._tenant + DUtilFile.addBeginSlash(_destination);
+			}
+			public function set _destination(value:String):void
+			{
+				destination = value;
+			}
+
+			public var _relatedObject:Object;
+
+			public var _loader:Loader;
+			public var _fileReference:FileReference;
+			public var _imgMD5Checksum:String
+			public var _fileExtStr:String;
+			public var _fileStr:String;
+			public var _promptClean:Boolean;
+			public var _promptedForClean:Boolean;
+			public var _description:String;
+			public var _blazeDS:BlazeDs;
+			public var _isLoading:Boolean;
+			public var _isUploading:Boolean;
+
+			private var _previewContainer:Group;
+			private var _previewContainerFull:TitleWindow;
+			private var _previewImage:DImage;
+			private var _previewImageFull:DImage;
+
+			public static var _numberOfBrowseWindowsOpened:int = 0;
+
+			public static const _DEFAULT_SERVLET_NAME:String = "DGUI_FileUploadServlet";
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Overrides:
+
+			//------------------------------------------------------------------
+			// Class Overrides:
+
+			override public function set initialized(value:Boolean):void
+			{
+				super.initialized = value;
+
+				if (value)
+				{
+					addEventListener(FocusEvent.FOCUS_OUT, onFocusOut, false, 0, true);
+					_tickImage.addEventListener(MouseEvent.CLICK, mainLabelClicked, false, 0, true);
+					_tickImage.addEventListener(MouseEvent.ROLL_OVER, dlabel1_mouseOverHandler, false, 0, true);
+					_tickImage.addEventListener(MouseEvent.ROLL_OUT, removePreviewContainerPopUp, false, 0, true);
+					_mainLabel.addEventListener(MouseEvent.CLICK, mainLabelClicked, false, 0, true);
+					_mainLabel.addEventListener(MouseEvent.ROLL_OVER, dlabel1_mouseOverHandler, false, 0, true);
+					_mainLabel.addEventListener(MouseEvent.ROLL_OUT, removePreviewContainerPopUp, false, 0, true);
+					_fileSelection.addEventListener(MouseEvent.CLICK, browseFiles, false, 0, true);
+					_fileSelection.addEventListener(FocusEvent.FOCUS_IN, controlFileSelectionFocus, false, 0, true);
+					_fileSelection.addEventListener(FocusEvent.FOCUS_OUT, controlFileSelectionFocus, false, 0, true);
+					_cleanLabel.addEventListener(MouseEvent.CLICK, cleanMouseEventWrapper, false, 0, true);
+				}
+			}
+
+			override protected function keyDownHandler(event:KeyboardEvent):void
+			{
+				if (!_promptedForClean)
+					if (event.keyCode == Keyboard.SPACE)
+					{
+						if (event.target.id == "_fileSelection")
+							browseFiles();
+						else if (event.target.id == "_mainLabel")
+							mainLabelClicked(event);
+					}
+			}
+
+			//------------------------------------------------------------------
+			// DIGUIInput implementation:
+
+			public function get text():String
+			{
+				if (_imgMD5Checksum)
+					return _imgMD5Checksum + _fileExtStr;
+				else
+					return null;
+			}
+
+			public function set text(value:String):void
+			{
+				value = StringUtil.trim(value);
+
+				if (value)
+				{
+					doClean();
+					entersOnLoadingMode();
+
+					const splittedChecksumStr:Array = value.split(".");
+					_imgMD5Checksum = splittedChecksumStr[0];
+					_fileExtStr = "." + splittedChecksumStr[1];
+
+					if (DSession._imageByteArrayCache && DSession._imageByteArrayCache.hasOwnProperty(text))
+						onImageLoaded(null);
+					else
+					{
+						_loader = new Loader();
+						_loader.contentLoaderInfo.addEventListener(ProgressEvent.PROGRESS, onUploadProgress, false, 0, true);
+						_loader.contentLoaderInfo.addEventListener(IOErrorEvent.IO_ERROR, onLoadError, false, 0, true);
+						_loader.contentLoaderInfo.addEventListener(Event.COMPLETE, onImageLoaded, false, 0, true);
+						
+						_isLoading = true;
+						_isUploading = false;
+						
+						_loader.load(new URLRequest(getCompleteImageURL(text)));
+					}
+				}
+				else
+					clean();
+			}
+
+			override public function setFocus():void
+			{
+				_fileSelection.setFocus();
+			}
+
+			public function clean():void
+			{
+				doClean();
+				currentState = stateNoImage.name;
+				releaseMyLock();
+			}
+
+			public function doClean():void
+			{
+				removeFileReferenceListeners(true);
+				removeLoaderListeners(true);
+				doCleanNullables();
+			}
+
+			public function doCleanNullables():void
+			{
+				_fileStr = null;
+				_fileExtStr = null;
+				_imgMD5Checksum = null;
+
+				if (_previewImage)
+					_previewImage.source = null;
+				if (_previewImageFull)
+					_previewImageFull.source = null;
+
+				_promptClean = false;
+				_promptedForClean = false;
+			}
+
+			public function dispose():void
+			{
+				removeEventListener(FocusEvent.FOCUS_OUT, onFocusOut);
+
+				removeFileReferenceListeners(true);
+				removeTickImageListeners();
+				removeMainLabelListeners();
+				removeCleanLabelListeners();
+				removeFileSelectionListeners();
+				removeLoaderListeners(true);
+				removePreviewContainerFullListeners();
+				removePreviewContainerListeners();
+			}
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Public interface:
+
+			public function getCompleteImageURL(fileName:String):String
+			{
+				if (!_applicationDomain)
+					_applicationDomain = DSession._applicationDomain;
+
+				if (DSession._tenant)
+					return _applicationDomain + "/" + _enterpriseDestination + "/" + fileName;
+				else
+				{
+					if (_applicationDomain)
+						return _applicationDomain + DUtilFile.addBeginSlash(_destination) + fileName;
+					else
+						throw new Error(StrConsts.getRMString2("500250"));
+				}
+			}
+
+
+
+
+
+
+			//------------------------------------------------------------------
+			// Upload process:
+
+			public function browseFiles(event:Event=null):void
+			{
+				if (_numberOfBrowseWindowsOpened > 0)
+				{
+					DNotificator.showInfo(StrConsts.getRMString(157));
+					return;
+				}
+
+				if  (!_fileReference)
+				{
+					_fileReference = new FileReference();
+					_fileReference.addEventListener(Event.SELECT, onSelectFile, false, 0, true);
+					_fileReference.addEventListener(ProgressEvent.PROGRESS, onUploadProgress, false, 0, true);
+					_fileReference.addEventListener(Event.COMPLETE, onFileRefComplete, false, 0, true);
+					_fileReference.addEventListener(Event.CANCEL, onCancel, false, 0, true);
+					_fileReference.addEventListener(IOErrorEvent.IO_ERROR, onUploadIoError, false, 0, true);
+					_fileReference.addEventListener(SecurityErrorEvent.SECURITY_ERROR, onUploadSecurityError, false, 0, true);
+				}
+
+				_fileReference.browse(DUtilUpload.getImageFilterArray());
+				_numberOfBrowseWindowsOpened++
+			}
+
+			private function onSelectFile(event:Event):void
+			{
+				_numberOfBrowseWindowsOpened--;
+
+				_fileReference = FileReference(event.target);
+
+				if (_fileReference.size > DUtilUpload._1MB_In_Bytes)
+				{
+					clean();
+					DNotificator.showError2(StrConsts.getRMString(98));
+					return;
+				}
+				else
+				{
+					if (isFileSelectionBtnFocused())
+					{
+						_fileSelection.setFocus();
+						_fileSelection.drawFocus(false);
+					}
+
+					removeLoaderListeners(true);
+					doCleanNullables();
+					entersOnLoadingMode();
+					
+					_isLoading = true;
+					_isUploading = false;
+					
+					_fileReference.load();
+				}
+			}
+
+			private function onUploadProgress(event:ProgressEvent):void
+			{
+				updateProgBar(Math.round((event.bytesLoaded / event.bytesTotal) * 100));
+				dispatchEvent(new ProgressEvent(DUploadDownloadEvent._ON_UPLOAD_PROGRESS, false, false, event.bytesLoaded, event.bytesTotal));
+			}
+
+			private function onFileRefComplete(event:Event=null):void
+			{
+				if ((!_loader) && _fileReference)
+				{
+					createAllImageRelatedObjsIfNeeded();
+
+					_fileStr = _fileReference.name;
+					_fileExtStr = _fileReference.type;
+					_imgMD5Checksum = MD5.hashBinary(_fileReference.data);
+
+					if (_relatedObject)
+						DGUIServiceProxy.getOnEnterpriseHomeFolder(
+							_destination,
+							function (returnObj:Object):void
+							{
+								if ((!_loader) && _fileReference)
+								{
+									if (returnObj && returnObj.length == 1)
+										doOnComplete(true);
+									else
+										doOnComplete();
+								}
+							},
+							text
+						);
+					else
+						doOnComplete();
+				}
+			}
+
+			private function doOnComplete(nullFileReference:Boolean=false):void
+			{
+				if ((!_loader) && (_fileReference))
+				{
+					_previewImage.source = _fileReference.data;
+					_previewImageFull.source = _fileReference.data;
+
+//					if (currentState == stateLoadingImage.name)
+					if (_isLoading)
+						dispatchEvent(new DLoadEvent(DLoadEvent._ON_LOADED));
+					else if (_isUploading)
+						dispatchEvent(new Event(DUploadDownloadEvent._ON_UPLOAD_COMPLETE));
+
+					currentState = stateWithImage.name;
+
+					if (isFileSelectionBtnFocused())
+					{
+						_fileSelection.setFocus();
+						_fileSelection.drawFocus(true);
+					}
+
+					if (nullFileReference)
+						removeFileReferenceListeners(true);
+				}
+				
+				_isLoading = false;
+				_isUploading = false;
+
+				releaseMyLock();
+			}
+
+			private function onCancel(event:Event):void
+			{
+				_numberOfBrowseWindowsOpened--;
+
+				if (_fileReference && !_fileReference.data)
+				{
+					if (_imgMD5Checksum)
+						removeFileReferenceListeners(true);
+					else
+						clean();
+				}
+			}
+
+			private function onUploadIoError(event:IOErrorEvent):void
+			{
+				clean();
+				DNotificator.showError2(StrConsts.getRMErrorString("500251"));
+//				dispatchEvent(new IOErrorEvent(DUploadDownloadEvent._ON_UPLOAD_IO_ERROR, false, false, event.text));
+			}
+
+			private function onUploadSecurityError(event:SecurityErrorEvent):void
+			{
+				clean();
+				DNotificator.showError2(StrConsts.getRMErrorString("500252"));
+//				dispatchEvent(new SecurityErrorEvent(DUploadDownloadEvent._ON_UPLOAD_SECURITY_ERROR, false, false, event.text));
+			}
+
+			//------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+			public function startUpload():Boolean
+			{
+				if (_fileReference)
+				{
+					addMyLock();
+
+					const postVars:URLVariables = new URLVariables();
+					postVars.enterprise = DSession._tenant;
+					postVars.destination = _destination;
+					postVars.imageMD5Checksum = _imgMD5Checksum;
+
+					const request:URLRequest = new URLRequest();
+					request.data = postVars;
+					request.method = URLRequestMethod.POST;
+
+					if (!_applicationDomain)
+						_applicationDomain = DSession._applicationDomain;
+
+					if (!_servletName)
+						_servletName = _DEFAULT_SERVLET_NAME;
+
+					request.url = DUtilFile.addEndSlash(_applicationDomain) + DUtilFile.removeBeginSlash(_servletName);
+
+					entersOnLoadingMode();
+					
+					_isLoading = false;
+					_isUploading = true;
+					
+					_fileReference.upload(request, "file", false);
+
+					return true;
+				}
+				else
+					return false;
+			}
+
+			public function excludeImage():void
+			{
+				addMyLock();
+
+				dispatchEvent(new DLoadEvent(DLoadEvent._ON_EXCLUDING));
+
+				if (!_blazeDS)
+					_blazeDS = new BlazeDs();
+
+				_blazeDS.invokeOld(
+					DGUIServiceProxy.__deleteOnEnterpriseHomeFolder,
+					DGUIServiceProxy.mountParams_deleteOnEnterpriseHomeFolder(_destination, [ text ]),
+					function (returnObj:Object):void
+					{
+						clean();
+						releaseMyLock();
+
+						const deleted:Array = returnObj.deleted;
+						const notDeleted:Array = returnObj.notDeleted;
+						const notExists:Array = returnObj.notExists;
+
+						var finalMsg:String = "";
+						var msgType:String = null;
+
+						if (deleted)
+						{
+							const deletedLength:int = deleted.length;
+							if (deletedLength == 0)
+							{
+								// TODO: Não pode acontecer isto.
+							}
+							else
+								if (deletedLength == 1)
+									finalMsg += "1 item excluído com sucesso.";
+								else
+									finalMsg += deletedLength + " itens excluídos com sucesso.";
+
+							msgType = "showInfo";
+
+							dispatchEvent(new DLoadEvent(DLoadEvent._ON_EXCLUDED));
+						}
+
+						if (notExists)
+						{
+							const notExistsLength:int = notExists.length;
+							if (notExistsLength == 0)
+							{
+								// TODO: Não pode acontecer isto.
+							}
+							else
+								if (notExistsLength == 1)
+									finalMsg += "\n\n1 item informado para exclusão não existe no servidor.";
+								else
+									finalMsg += "\n\n" + notExistsLength + " itens informados para exclusão não existem no servidor.";
+
+							msgType = "showWarning";
+						}
+
+						if (notDeleted)
+						{
+							const notDeletedLength:int = notDeleted.length;
+							if (notDeletedLength == 0)
+							{
+								// TODO: Não pode acontecer isto.
+							}
+							else
+								if (notDeletedLength == 1)
+									finalMsg += "\n\n1 item NÃO foi excluído. Tente novamente. Caso o problema persista, contate o suporte técnico.";
+								else
+									finalMsg += "\n\n" + notDeletedLength + " itens NÃO foram excluídos. Tente novamente. Caso o problema persista, contate o suporte técnico.";
+
+							msgType = "showError";
+						}
+
+						DNotificator[msgType](finalMsg);
+					}
+				);
+			}
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Private interface:
+
+			//------------------------------------------------------------------
+			// Generic private interface:
+
+			private function updateProgBar(numPerc:Number = 0):void
+			{
+				_progBar.label = numPerc + StrConsts._CHAR_PERCENT;
+				_progBar.setProgress(numPerc, 100);
+				_progBar.validateNow();
+			}
+
+			private function showFullImagePopup():void
+			{
+				PopUpManager.addPopUp(_previewContainerFull, FlexGlobals.topLevelApplication as DisplayObject, true);
+				PopUpManager.centerPopUp(_previewContainerFull);
+				callLater(DUtilFocus.setFocusForcingIndicator, [ _previewContainerFull ]);
+			}
+
+			private function createAllImageRelatedObjsIfNeeded():void
+			{
+				if (!_previewImage)
+					createPreviewImage();
+				if (!_previewContainer)
+					createPreviewContainer();
+				if (!_previewImageFull)
+					createPreviewImageFull();
+				if (!_previewContainerFull)
+					createPreviewContainerFull();
+			}
+
+			private function isFileSelectionBtnFocused():Boolean
+			{
+				return ((getFocus()) && ((getFocus() is UIComponent)) && ((getFocus() as UIComponent).id == "_fileSelection"));
+			}
+
+			private function addMyLock():void
+			{
+				if (_blazeDS)
+					_blazeDS.addLock(this);
+			}
+
+			private function releaseMyLock():void
+			{
+				if (_blazeDS)
+					_blazeDS.releaseLock(this);
+			}
+
+			private function entersOnLoadingMode():void
+			{
+				if (isFileSelectionBtnFocused())
+				{
+					if (_isLoading)
+						DUtilFocus.setFocusOnNextComponent(focusManager);
+					else if (_isUploading)
+					{
+						_fileSelection.drawFocus(false);
+						stage.focus = null;
+					}
+				}
+				
+				addMyLock();
+				currentState = stateLoadingImage.name;
+				dispatchEvent(new DLoadEvent(DLoadEvent._ON_LOADING));
+				_promptClean = false;
+			}
+
+			//------------------------------------------------------------------
+			// Creation methods:
+
+			private function createPreviewImage():void
+			{
+				_previewImage = new DImage();
+				_previewImage.smoothBitmapContent = true;
+				_previewImage.width = 150;
+				_previewImage.height = 100;
+			}
+
+			private function createPreviewContainer():void
+			{
+				_previewContainer = new Group();
+				_previewContainer.width = 150;
+				_previewContainer.height = 100;
+				_previewContainer.addEventListener(Event.ENTER_FRAME, thumbnailPreview, false, 0, true);
+				_previewContainer.addElement(_previewImage);
+			}
+
+			private function createPreviewImageFull():void
+			{
+				_previewImageFull = new DImage();
+				_previewImageFull.smoothBitmapContent = true;
+			}
+
+			private function createPreviewContainerFull():void
+			{
+				_previewContainerFull = new TitleWindow();
+				_previewContainerFull.showCloseButton = true;
+				_previewContainerFull.title = StrConsts.getRMString(100);
+				_previewContainerFull.titleIcon = DIconLibrary.PICTURE;
+				_previewContainerFull.maxWidth = (Capabilities.screenResolutionX / 100) * 80;
+				_previewContainerFull.maxHeight = (Capabilities.screenResolutionY / 100) * 80;
+				_previewContainerFull.addElement(_previewImageFull);
+				_previewContainerFull.addEventListener(FlexEvent.CREATION_COMPLETE,	previewContainerFullCreationCompleted, false, 0, true);
+			}
+
+			//------------------------------------------------------------------
+			// Event handlers:
+
+			private function onFocusOut(event:FocusEvent):void
+			{
+				if (_fileSelection)
+					_fileSelection.drawFocus(false);
+			}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+			// _mainLabel:
+
+			private function mainLabelClicked(event:Event):void
+			{
+				if (currentState == stateNoImage.name)
+					browseFiles();
+				else if (currentState == stateWithImage.name)
+					showFullImagePopup();
+			}
+
+			private function dlabel1_mouseOverHandler(event:MouseEvent):void
+			{
+				if (currentState == stateWithImage.name)
+					PopUpManager.addPopUp(_previewContainer, FlexGlobals.topLevelApplication as DisplayObject);
+			}
+
+			private function removePreviewContainerPopUp(event:MouseEvent):void
+			{
+				if (currentState == stateWithImage.name)
+					PopUpManager.removePopUp(_previewContainer);
+			}
+
+			// _cleanLabel:
+
+			private function cleanMouseEventWrapper(event:MouseEvent):void
+			{
+				if (_promptClean)
+				{
+					const dPrompt:DPrompt = new DPrompt();
+					dPrompt.titleIcon = DIconLibrary.WARNING;
+					dPrompt._icons.push(DIconLibrary128.IMAGE_TIF);
+					dPrompt._messages.push(StrConsts.getRMString(101));
+					dPrompt._icons.push(DIconLibrary128.IMAGE_REMOVE);
+					dPrompt._messages.push(StrConsts.getRMString(102));
+					dPrompt._executeOnSelect =
+						function (selectedIndex:int):void
+						{
+							if (selectedIndex == 0)
+								clean();
+							else if (selectedIndex == 1)
+								excludeImage();
+
+							_promptedForClean = false;
+						};
+					dPrompt.show();
+
+					_promptedForClean = true;
+				}
+				else
+					clean();
+			}
+
+			// _loader:
+
+			private function onImageLoaded(event:Event):void
+			{
+				createAllImageRelatedObjsIfNeeded();
+
+				var bytes:ByteArray;
+				if (event)
+				{
+					bytes = _loader.contentLoaderInfo.bytes;
+
+					_previewImage.source = bytes;
+					_previewImageFull.source = bytes;
+
+					DSession._imageByteArrayCache[text] = bytes;
+				}
+				else if (DSession._imageByteArrayCache && DSession._imageByteArrayCache.hasOwnProperty(text))
+				{
+					bytes = DSession._imageByteArrayCache[text];
+
+					_previewImage.source = bytes;
+					_previewImageFull.source = bytes;
+				}
+
+				dispatchEvent(new DLoadEvent(DLoadEvent._ON_LOADED));
+				currentState = stateWithImage.name;
+				releaseMyLock();
+
+				removeLoaderListeners(true);
+
+				_promptClean = true;
+				
+				_isLoading = false;
+			}
+
+			private function onLoadError(event:IOErrorEvent):void
+			{
+				clean();
+				DNotificator.showError2("Erro #: O sistema não conseguiu encontrar a imagem especificada. Contate o suporte técnico!");
+				dispatchEvent(new DLoadEvent(DLoadEvent._ON_LOAD_IO_ERROR));
+			}
+
+			// _previewContainer:
+
+			private function thumbnailPreview(event:Event):void
+			{
+				if (stage)
+				{
+					event.currentTarget.x = stage.mouseX;
+					event.currentTarget.y = stage.mouseY;
+				}
+			}
+
+			// _fileSelection:
+
+			private function controlFileSelectionFocus(event:FocusEvent):void
+			{
+				if (event.type == FocusEvent.FOCUS_IN)
+					_fileSelection.drawFocus(true);
+				else
+					_fileSelection.drawFocus(false);
+			}
+
+			// _previewContainerFull:
+
+			private function previewContainerFullCreationCompleted(event:FlexEvent):void
+			{
+				_previewContainerFull.removeEventListener(FlexEvent.CREATION_COMPLETE, previewContainerFullCreationCompleted);
+				_previewContainerFull.mx_internal::closeButton.addEventListener(MouseEvent.CLICK, removePreviewContainerPopUpFull, false, 0, true);
+				_previewContainerFull.addEventListener(KeyboardEvent.KEY_DOWN, removePreviewContainerPopUpFull, false, 0, true);
+			}
+
+			private function removePreviewContainerPopUpFull(event:Event):void
+			{
+				if (event is KeyboardEvent)
+				{
+					if ((event as KeyboardEvent).keyCode == Keyboard.ESCAPE)
+					{
+						event.stopImmediatePropagation();
+						PopUpManager.removePopUp(_previewContainerFull);
+					}
+				}
+				else
+					PopUpManager.removePopUp(_previewContainerFull);
+			}
+
+			//------------------------------------------------------------------
+			// Listener removers:
+
+			private function removeFileReferenceListeners(setNull:Boolean=false):void
+			{
+				if (_fileReference)
+				{
+					_fileReference.removeEventListener(Event.CANCEL, onCancel);
+					_fileReference.cancel();
+					_fileReference.removeEventListener(Event.SELECT, onSelectFile);
+					_fileReference.removeEventListener(ProgressEvent.PROGRESS, onUploadProgress);
+					_fileReference.removeEventListener(Event.COMPLETE, onFileRefComplete);
+					_fileReference.removeEventListener(IOErrorEvent.IO_ERROR, onUploadIoError);
+					_fileReference.removeEventListener(SecurityErrorEvent.SECURITY_ERROR, onUploadSecurityError);
+
+					if (setNull)
+						_fileReference = null;
+				}
+			}
+
+			private function removeTickImageListeners():void
+			{
+				_tickImage.removeEventListener(MouseEvent.CLICK, mainLabelClicked);
+				_tickImage.removeEventListener(MouseEvent.ROLL_OVER, dlabel1_mouseOverHandler);
+				_tickImage.removeEventListener(MouseEvent.ROLL_OUT, removePreviewContainerPopUp);
+			}
+
+			private function removeMainLabelListeners():void
+			{
+				_mainLabel.removeEventListener(MouseEvent.CLICK, mainLabelClicked);
+				_mainLabel.removeEventListener(MouseEvent.ROLL_OVER, dlabel1_mouseOverHandler);
+				_mainLabel.removeEventListener(MouseEvent.ROLL_OUT, removePreviewContainerPopUp);
+			}
+
+			private function removeCleanLabelListeners():void
+			{
+				_cleanLabel.removeEventListener(MouseEvent.CLICK, cleanMouseEventWrapper);
+			}
+
+			private function removeFileSelectionListeners():void
+			{
+				_fileSelection.removeEventListener(MouseEvent.CLICK, browseFiles);
+				_fileSelection.removeEventListener(FocusEvent.FOCUS_IN, controlFileSelectionFocus);
+				_fileSelection.removeEventListener(FocusEvent.FOCUS_OUT, controlFileSelectionFocus);
+			}
+
+			private function removeLoaderListeners(setNull:Boolean=false):void
+			{
+				if (_loader)
+				{
+					_loader.unload();
+					_loader.contentLoaderInfo.removeEventListener(Event.COMPLETE, onImageLoaded);
+					_loader.contentLoaderInfo.removeEventListener(ProgressEvent.PROGRESS, onUploadProgress);
+					_loader.contentLoaderInfo.removeEventListener(IOErrorEvent.IO_ERROR, onLoadError);
+
+					if (setNull)
+						_loader = null;
+				}
+			}
+
+			private function removePreviewContainerListeners():void
+			{
+				if (_previewContainer)
+					_previewContainer.removeEventListener(Event.ENTER_FRAME, thumbnailPreview);
+			}
+
+			private function removePreviewContainerFullListeners():void
+			{
+				if (_previewContainerFull)
+				{
+					if (_previewContainerFull.mx_internal::closeButton)
+						_previewContainerFull.mx_internal::closeButton.removeEventListener(MouseEvent.CLICK, removePreviewContainerPopUpFull);
+
+					_previewContainerFull.removeEventListener(KeyboardEvent.KEY_DOWN, removePreviewContainerPopUpFull);
+				}
+			}
+
+			//------------------------------------------------------------------
+		]]>
+	</fx:Script>
+
+	<s:states>
+		<s:State id="stateNoImage" name="stateNoImage" />
+		<s:State id="stateLoadingImage" name="stateLoadingImage" />
+		<s:State id="stateWithImage" name="stateWithImage" />
+	</s:states>
+
+	<component:DImage includeIn="stateWithImage" id="_tickImage" buttonMode="true" source="{DIconLibrary.TICK}" itemCreationPolicy="immediate" />
+	<s:HGroup color="0x4682B4" verticalAlign="bottom" width.stateLoadingImage="100%" height="100%">
+		<component:DLabel
+			excludeFrom="stateLoadingImage"
+			id="_mainLabel"
+			text.stateNoImage="{StrConsts.getRMString(94)}"
+			text.stateWithImage="{StrConsts.getRMString(93)}"
+			buttonMode="true"
+			verticalAlign="bottom"
+			height="100%" />
+		<component:DLabel includeIn="stateWithImage" focusEnabled="false" text="| " />
+		<component:DLabel includeIn="stateWithImage" id="_cleanLabel" text="{StrConsts.getRMString(99)}" buttonMode="true" itemCreationPolicy="immediate" />
+		<mx:ProgressBar includeIn="stateLoadingImage" id="_progBar" focusEnabled="false" mode="manual" label="{StrConsts.getRMString(9)}..." labelPlacement="center" width="100%" />
+	</s:HGroup>
+	<s:VGroup excludeFrom="stateLoadingImage" id="_fileSelection" buttonMode="true" verticalAlign="bottom" height="100%">
+		<component:DBitmapImage source="{DIconLibrary.FOLDER_PICTURE}" />
+	</s:VGroup>
+
+</s:HGroup>

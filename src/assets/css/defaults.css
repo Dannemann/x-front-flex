@@ -1,0 +1,130 @@
+/* FLEX3 */
+/*
+AutoComplete
+{
+	selected-item-style-name: macMail;
+}
+*/
+
+/* FLEX4 */
+@namespace components "br.com.dannemann.gui.*";
+
+
+
+.loadingToolTip {
+/*
+
+	color: white;
+	cornerRadius: 0;
+	fontSize: 24;*/
+
+	backgroundAlpha: .5;
+	backgroundColor: Green;
+}
+
+
+
+
+components|AutoComplete
+{
+	selected-item-style-name: macMail;
+}
+
+
+.none
+{
+	over-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	up-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	down-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	selected-over-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	selected-up-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	selected-down-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	padding-top: 0;
+	padding-bottom: 0;
+	padding-left: 0;
+	padding-right: 0;
+	font-weight: normal;
+	selected-font-weight: bold;
+	show-comma: yes;
+}
+
+.underline
+{
+	over-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	up-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	down-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	selected-over-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	selected-up-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	selected-down-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	padding-top: 0;
+	padding-bottom: 0;
+	padding-left: 0;
+	padding-right: 0;
+	text-decoration: underline;
+	font-weight: normal;
+	selected-font-weight: bold;
+	show-comma: yes;
+}
+
+.normal
+{
+	over-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	up-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	down-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	selected-over-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	selected-up-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	selected-down-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	padding-top: 0;
+	padding-bottom: 0;
+	padding-left: 0;
+	padding-right: 0;
+	font-weight: normal;
+	selected-font-weight: bold;
+	show-comma: yes;
+}
+
+.macMail
+{
+	over-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.MacMailSkin");
+	up-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.MacMailSkin");
+	down-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.MacMailSkin");
+	selected-over-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.MacMailSkin");
+	selected-up-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.MacMailSkin");
+	selected-down-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.MacMailSkin");
+	padding-top: 0;
+	padding-bottom: 0;
+	text-selected-color: #FFFFFF;
+	padding-left: 8;
+	padding-right: 8;
+	font-weight: normal;
+}
+
+.facebook
+{
+	over-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.FacebookSkin");
+	up-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.FacebookSkin");
+	down-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.FacebookSkin");
+	selected-over-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.FacebookSkin");
+	selected-up-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.FacebookSkin");
+	selected-down-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.FacebookSkin");
+	padding-top: 0;
+	padding-bottom: 0;
+	text-selected-color: #FFFFFF;
+	padding-left: 2;
+	padding-right: 5;
+	font-weight: normal;
+}
+
+.actionsMenuButton
+{
+	over-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	up-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	down-skin: ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	selected-over-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	selected-up-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	selected-down-skin : ClassReference("br.com.dannemann.gui.skin.autoComplete.BlankSkin");
+	padding-top: 0;
+	padding-bottom: 0;
+	padding-left: 0;
+	padding-right: 4;
+}

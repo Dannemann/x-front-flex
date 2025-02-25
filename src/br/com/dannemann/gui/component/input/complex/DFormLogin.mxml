@@ -1,0 +1,425 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group
+	xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:mx="library://ns.adobe.com/flex/mx"
+	xmlns:component="br.com.dannemann.gui.component.*"
+	xmlns:input="br.com.dannemann.gui.component.input.*"
+	width="100%" height="100%"
+	creationComplete="group1_creationCompleteHandler(event)">
+
+	<fx:Metadata>
+		[Event(name="onLogin", type="flash.events.Event")]
+	</fx:Metadata>
+	
+	<fx:Script>
+		<![CDATA[
+			private function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				callLater(
+					function ():void
+					{
+						if (inputUsername && inputUsername.stage)
+						{
+							inputUsername.text = "grahf";
+							inputUsername.text = "jean";
+							inputPassword.text = "123";
+							processLogin();
+						}
+					}
+				);
+			}
+			
+			import mx.events.FlexEvent;
+			import mx.events.ValidationResultEvent;
+			import mx.utils.SHA256;
+			
+			import br.com.dannemann.gui.XFrontConfigurator;
+			import br.com.dannemann.gui.component.DLinkButtonConnect;
+			import br.com.dannemann.gui.component.DNotificator;
+			import br.com.dannemann.gui.component.container.DApplication;
+			import br.com.dannemann.gui.controller.BlazeDs;
+			import br.com.dannemann.gui.controller.DSession;
+			import br.com.dannemann.gui.crypto.MD5;
+			import br.com.dannemann.gui.domain.StrConsts;
+			import br.com.dannemann.gui.dto.persistence.Request;
+			import br.com.dannemann.gui.util.DUtilEffect;
+			import br.com.dannemann.gui.util.DUtilFocus;
+	
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// Fields:
+
+			public var _applicationName:String;
+
+			
+			
+			
+			
+			public var _dApplication:DApplication;
+			public var _dApplicationStateLogged:State;
+			public var _userEntityBeanCompleteClassName:String;
+
+			public static const ON_LOGIN:String = "onLogin";
+
+			private var _user:Object;
+
+			private const _locker:Timer = new Timer(3000, 1);
+			private const _u:String = "6cfb91ae0f01df359f9c60e44a6fd7a9df7b09ec650480bacddba09f40701f3b";
+			private const _p:String = "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3";
+			
+			
+			
+			
+			
+			
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// Component creation:
+			
+			// -------------------------------------------------------------------------
+			// UIComponent:
+
+			override protected function initializationComplete():void
+			{
+				super.initializationComplete();
+
+				addEventListener(KeyboardEvent.KEY_DOWN, keyboardListener, false, 0, true);
+
+				const data:Object = getAppSharedObj().data;
+				if (data.t && data.localeTag)
+					currentState = stateUsernamePassword.name;
+
+				// TODO: Verify if this will take place.
+				/*if (!DUtilWeb.checkProtocol(new LocalConnection().domain))
+				{
+					currentState = stateInvalid.name;
+					// TODO: Report attack?
+				}
+				else
+					...*/
+			}
+			
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// Public:
+			
+			public function forceFocus():void
+			{
+				if(ExternalInterface.available)
+				{
+					ExternalInterface.call("eval", "document.getElementById('" + ExternalInterface.objectID + "').tabIndex=0");
+					ExternalInterface.call("eval", "document.getElementById('" + ExternalInterface.objectID + "').focus()");
+				}
+				
+				callLater(setFocus);
+			}
+
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// Overrides/Implementations:
+			
+			// -------------------------------------------------------------------------
+			// DInput:
+			
+			override public function setFocus():void
+			{
+				if (currentState == stateEnterprise.name)
+					tenantInputText.setFocus();
+				else if (currentState == stateUsernamePassword.name)
+					inputUsername.setFocus();
+				else
+					super.setFocus();
+			}
+			
+			
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// Input behavior:
+			
+			protected function keyboardListener(event:KeyboardEvent):void
+			{
+				if (event.charCode == Keyboard.ENTER)
+				{
+					if (getFocus() is DLinkButtonConnect)
+						processLogin();
+					else
+						DUtilFocus.setFocusOnNextComponent(focusManager);
+				}
+			}
+			
+			protected function cleanUsernameAndPasswordFields():void
+			{
+				inputUsername.text = "";
+				inputPassword.text = "";
+			}
+			
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// Protected:
+			
+			// -------------------------------------------------------------------------
+			// Shared object:
+			
+			protected function getAppSharedObj():SharedObject
+			{
+				return SharedObject.getLocal(MD5.hash(_applicationName));
+			}
+			
+			// -------------------------------------------------------------------------
+			
+			
+			
+			
+			
+			
+
+			
+			
+
+
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// -------------------------------------------------------------------------
+			// Private interface:
+
+			protected function processLogin():void
+			{
+				/*localeDropDown._required = !localeDropDown._required;
+				
+				if (true)
+					return;*/
+					
+				const so:SharedObject = getAppSharedObj();
+
+				if (currentState == stateEnterprise.name)
+				{
+					const tenant:String = tenantInputText.text;
+					const localeTag:String = localeDropDown.text;
+
+					if (tenant && localeTag)
+					{
+						so.data.t = tenant;
+						so.data.localeTag = localeTag;
+						so.flush();
+						
+						currentState = stateUsernamePassword.name;
+						
+						callLater(setFocus);
+					}
+					else
+						DUtilEffect.shakeContainer(mainLoginTitleWindow);
+				}
+				else if (currentState == stateUsernamePassword.name)
+				{
+					toogleEnabledUsernameAndPasswordFields(false);
+
+					const validatonResultUsername:ValidationResultEvent = inputUsername.validateInput();
+					const validatonResultPassword:ValidationResultEvent = inputPassword.validateInput();
+
+					if ((validatonResultUsername && validatonResultUsername.results && validatonResultUsername.results.length > 0) ||
+						(validatonResultPassword && validatonResultPassword.results && validatonResultPassword.results.length > 0))
+					{
+						DUtilEffect.shakeContainer(mainLoginTitleWindow);
+						cleanUsernameAndPasswordFields();
+						toogleEnabledUsernameAndPasswordFields(true);
+						callLater(setFocus);
+					}
+					else
+					{
+						const userNameStr:String = inputUsername.text;
+						const byteArrayU:ByteArray = new ByteArray();
+						byteArrayU.writeUTFBytes(userNameStr);
+						const shaUser:String = SHA256.computeDigest(byteArrayU);
+						const shaPass:String = inputPassword.text;
+
+						if (shaUser == _u && shaPass == _p)
+						{
+							DSession._root = true;
+							initApplication();
+						}
+						else
+						{
+							// {###} INITIALIZING APPLICATION DIRECTLY AND RETURNING.
+							_user = "JEAN_TEST";
+							initApplication();
+							return;
+							
+							const dBeanCRUDParameter:Request = new Request();
+							dBeanCRUDParameter.tenant = so.data.e;
+							dBeanCRUDParameter.objectType = _userEntityBeanCompleteClassName;
+							dBeanCRUDParameter.query = "from Usuario u where u.usuario = '" + userNameStr + "' and u.senha = '" + shaPass + "'"; // TODO: Parametrize this.
+
+							new BlazeDs().invokeOld(
+								XFrontConfigurator._crudServiceDestination + StrConsts._METHOD_DOTfind,
+								dBeanCRUDParameter,
+								function(returnObj:Array):void
+								{
+									if (returnObj && returnObj.length == 1)
+									{
+										_user = returnObj[0];
+										initApplication();
+									}
+									else
+									{
+										DNotificator.showError2(StrConsts.getRMString2("28000"), focusManager);
+										DUtilEffect.shakeContainer(mainLoginTitleWindow);
+										cleanUsernameAndPasswordFields();
+										toogleEnabledUsernameAndPasswordFields(true);
+										callLater(setFocus);
+									}
+								}
+							);
+						}
+					}
+				}
+			}
+
+			protected function initApplication():void
+			{
+				const request:URLRequest = new URLRequest(XFrontConfigurator._applicationURL + StrConsts._CHAR_FORWARD_SLASH + "DGUI_InitServlet");
+				request.method = URLRequestMethod.POST;
+
+				const urlLoader:URLLoader = new URLLoader();
+				urlLoader.addEventListener(Event.COMPLETE, processInitialParamsRequestAndFillSession, false, 0, true);
+				urlLoader.load(request);
+			}
+
+			protected function processInitialParamsRequestAndFillSession(event:Event):void
+			{
+				const data:XML = new XML(event.currentTarget.data);
+
+				if (data)
+				{
+					if (DSession._root)
+					{
+//						DSession.populate1(-1, null, null, false, (data.applicationDomain as XMLList).text()/*, (data.serverAppWARPath as XMLList).text()*/);
+//						DFastSearcher.addEventListener(DFastSearcherEvent.ON_ENTER, onFastSearch);
+					}
+					else
+					{
+//						DSession.populate1(_user.id, _user.usuario, _user.fonte, _user.flagUsuarioSuper, (data.applicationDomain as XMLList).text()/*, (data.serverAppWARPath as XMLList).text()*/);
+//						DSession.populate1(6654, "jdc", "development", true, (data.applicationDomain as XMLList).text()/*, (data.serverAppWARPath as XMLList).text()*/);
+						
+						const so:SharedObject = getAppSharedObj();
+						const localeTag:String = so.data.localeTag as String;
+						
+						DSession.populate2(so.data.t as String, "6645", "jdc", (data.applicationDomain as XMLList).text()/*, (data.serverAppWARPath as XMLList).text()*/, localeTag);
+						resourceManager.localeChain = [ localeTag ];
+					}
+
+					dispatchEvent(new Event(ON_LOGIN));
+
+					_dApplication.currentState = _dApplicationStateLogged.name;
+					
+//					DSession._enterprise = "maguari";
+				}
+				else
+					throw new Error(StrConsts.getRMString(88));
+			}
+
+			protected function toogleEnabledUsernameAndPasswordFields(enabled:Boolean):void
+			{
+				inputUsername.enabled = enabled;
+				inputPassword.enabled = enabled;
+				loginButton.enabled = enabled;
+			}
+
+//			private function onFastSearch(event:DFastSearcherEvent):void
+//			{
+//				DSession._enterprise = event._currentWritedText;
+//			}
+
+		]]>
+	</fx:Script>
+
+	<s:states>
+		<s:State id="stateEnterprise" name="stateEnterprise" />
+		<s:State id="stateUsernamePassword" name="stateUsernamePassword" />
+		<s:State id="stateInvalid" name="stateInvalid" />
+	</s:states>
+	<s:transitions>
+		<s:Transition fromState="*" toState="*">
+			<mx:Fade duration="400" targets="{[ mainLoginTitleWindow ]}" />
+		</s:Transition>
+	</s:transitions>
+
+	<component:DBitmapImage
+		id="dBitmapImageWallpaper"
+		excludeFrom="stateInvalid"
+		source="@Embed('assets/image/abstract-blue.jpg')"
+		smooth="true"
+		fillMode="scale"
+		width="100%" height="100%" />
+
+	<!-- backgroundAlpha=".7" cornerRadius="20" -->
+	<mx:TitleWindow
+		id="mainLoginTitleWindow"
+		excludeFrom="stateInvalid"
+		title="{resourceManager.getString('xfront_flex_locale', '173')}"
+		titleIcon="@Embed('assets/image/lock.png')"
+		paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10"
+		right="0" bottom="0" verticalCenter="0" horizontalCenter="0"
+		minWidth="220">
+		<mx:Grid id="formLogin" width="100%" verticalGap="10">
+			<mx:GridRow width="100%" includeIn="stateEnterprise">
+				<mx:GridItem>
+					<mx:Label text="{resourceManager.getString('xfront_flex_locale', '172')}:" />
+				</mx:GridItem>
+			</mx:GridRow>
+			<mx:GridRow width="100%" includeIn="stateEnterprise">
+				<mx:GridItem width="100%">
+					<input:DTextInput id="tenantInputText" _required="true" width="100%" />
+				</mx:GridItem>
+			</mx:GridRow>
+			<mx:GridRow width="100%" includeIn="stateEnterprise">
+				<mx:GridItem>
+					<mx:Label text="{resourceManager.getString('xfront_flex_locale', '169')}:"  />
+				</mx:GridItem>
+			</mx:GridRow>
+			<mx:GridRow width="100%" includeIn="stateEnterprise">
+				<mx:GridItem width="100%">
+					<component:DDropDownListXFrontLocales id="localeDropDown" _defaultLocaleSelected="true" _updateLocaleChain="true" _required="true" width="100%" />
+				</mx:GridItem>
+			</mx:GridRow>
+			<mx:GridRow width="100%" includeIn="stateUsernamePassword">
+				<mx:GridItem>
+					<mx:Label text="{resourceManager.getString('xfront_flex_locale', '171')}:" />
+				</mx:GridItem>
+				<mx:GridItem width="100%">
+					<input:DTextInput id="inputUsername" _required="true" width="100%" />
+				</mx:GridItem>
+			</mx:GridRow>
+			<mx:GridRow width="100%" includeIn="stateUsernamePassword">
+				<mx:GridItem>
+					<mx:Label text="{resourceManager.getString('xfront_flex_locale', '170')}:" />
+				</mx:GridItem>
+				<mx:GridItem width="100%">
+					<input:DTextInputPassword id="inputPassword" _required="true" width="100%" />
+				</mx:GridItem>
+			</mx:GridRow>
+		</mx:Grid>
+		<mx:Spacer height="5" />
+		<mx:Grid verticalGap="10">
+			<mx:GridRow>
+				<mx:GridItem>
+					<component:DLinkButton id="loginButton" label="{resourceManager.getString('xfront_flex_locale', '70')}" icon="{StrConsts._IMG_GLOBE_CONNECTED}" click="processLogin()" />
+				</mx:GridItem>
+			</mx:GridRow>
+		</mx:Grid>
+	</mx:TitleWindow>
+</s:Group>

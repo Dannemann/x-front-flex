@@ -1,0 +1,475 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Panel
+	xmlns:mx="http://www.adobe.com/2006/mxml"
+	implements="br.com.dannemann.gui.component.input.DInput"
+	layout="vertical"
+	title="{StrConsts.getRMString(58)}"
+	minWidth="400" minHeight="200" width="100%" height="100%">
+
+	<mx:Metadata>
+		[Event(name="uploadComplete", type="flash.events.Event")]
+		[Event(name="uploadProgress", type="flash.events.ProgressEvent")]
+		[Event(name="uploadCancel", type="flash.events.Event")]
+		[Event(name="uploadIOError", type="flash.events.IOErrorEvent")]
+		[Event(name="uploadDGUIError", type="flash.events.Event")]
+		[Event(name="uploadSecurityError", type="flash.events.SecurityErrorEvent")]
+	</mx:Metadata>
+
+	<mx:Script>
+		<![CDATA[
+			import br.com.dannemann.gui.component.input.DInput;
+			import br.com.dannemann.gui.component.DNotificator;
+			import br.com.dannemann.gui.controller.DSession;
+			import br.com.dannemann.gui.controller.ServerVarsDecoder;
+			import br.com.dannemann.gui.domain.StrConsts;
+			import br.com.dannemann.gui.event.DUploadDownloadEvent;
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Fields:
+
+			public var _description:String;
+
+			public var _applicationDomain:String;
+			public var _servletName:String;
+
+			public var destination:String;
+			public function get _destination():String
+			{
+				if (!destination)
+					throw new Error(StrConsts.getRMString2("500190"));
+
+				if (_relatedObject)
+					if (ServerVarsDecoder.hasNamedDVarWithin(destination, "this"))
+					{
+						const regExp:RegExp = new RegExp("\\$this{.+}", "is");
+						const values:Array = ServerVarsDecoder.getNamedDVarValues(destination, "this");
+						const valuesLength:int = values.length;
+						var finalDestination:String = "";
+
+						for (var i:int = 1; i < valuesLength; i++)
+							finalDestination += destination.replace(regExp, _relatedObject[values[i]])
+
+						return finalDestination;
+					}
+
+				return destination;
+			}
+			public function get _enterpriseDestination():String
+			{
+				DSession.checkEnterprise();
+				return "enterprise/" + DSession._tenant + "/" + _destination;
+			}
+			public function set _destination(value:String):void
+			{
+				destination = value;
+			}
+
+			public var _relatedObject:Object;
+
+			public static const _DEFAULT_SERVLET_NAME:String = "DGUI_FileUploadServlet";
+
+			private var _refAddFiles:FileReferenceList;
+			private var _refUploadFile:FileReference;
+			private var _arrUploadFiles:Array;
+			private var _numCurrentUpload:Number = 0;
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Overrides:
+
+			// Getters and setters:
+
+			override public function set initialized(value:Boolean):void
+			{
+				super.initialized = value;
+
+				if (value)
+				{
+					_arrUploadFiles = [];
+					enableUI();
+					uploadCheck();
+					currentState = mini.name;
+				}
+			}
+
+			//------------------------------------------------------------------
+			// DIGUIInput implementation:
+
+			public function get text():String
+			{
+				// TODO: What to do here???
+				return toString();
+			}
+
+			public function set text(value:String):void
+			{
+				// TODO: What to do here? Maybe set the values programmatically via an array or something like that.
+			}
+
+			override public function setFocus():void
+			{
+				if (enabled)
+				{
+					btnAdd.setFocus();
+					btnAdd.focusManager.showFocus();
+				}
+			}
+
+			public function clean():void
+			{
+				_numCurrentUpload = 0;
+				_arrUploadFiles = [];
+				listFiles.dataProvider = [];
+				updateProgBar();
+				cancelUploads();
+			}
+
+			public function dispose():void
+			{
+				if (_refAddFiles)
+					cancelFileSelection();
+
+				clean();
+			}
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Public interface:
+
+			public function removeCornersRadius():void
+			{
+				setStyle(StrConsts._FLEX_STYLE_PROPERTY_CORNER_RADIUS, 0);
+			}
+
+			public function cancelUploads():void
+			{
+				if (_refUploadFile)
+				{
+					_refUploadFile.cancel();
+					_refUploadFile.removeEventListener(ProgressEvent.PROGRESS, onUploadProgress);
+					_refUploadFile.removeEventListener(Event.COMPLETE, onUploadComplete);
+					_refUploadFile.removeEventListener(IOErrorEvent.IO_ERROR, onUploadIoError);
+					_refUploadFile.removeEventListener(SecurityErrorEvent.SECURITY_ERROR, onUploadSecurityError);
+					_refUploadFile = null;
+				}
+
+				enableUI();
+
+				dispatchEvent(new Event(DUploadDownloadEvent._ON_UPLOAD_CANCEL));
+			}
+
+			public function toggleMiniAndCompleteMode():void
+			{
+				currentState = currentState == "mini" ? StrConsts._CHAR_EMPTY_STRING : "mini";
+			}
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Private interface:
+
+			//------------------------------------------------------------------
+			// Adding files to upload:
+
+			private function addFiles():void
+			{
+				_refAddFiles = new FileReferenceList();
+				_refAddFiles.addEventListener(Event.SELECT, onSelectFile, false, 0, true);
+				_refAddFiles.addEventListener(Event.CANCEL, cancelFileSelection, false, 0, true);
+				_refAddFiles.browse();
+			}
+
+			private function onSelectFile(event:Event):void
+			{
+				_refAddFiles.removeEventListener(Event.SELECT, onSelectFile);
+
+				const arrFoundList:Array = [];
+
+				// Get list of files from file list and make a list of files already on upload list.
+				for (var i:Number = 0; i < _arrUploadFiles.length; i++)
+					for (var j:Number = 0; j < _refAddFiles.fileList.length; j++)
+						if (_arrUploadFiles[i].name == _refAddFiles.fileList[j].name)
+						{
+							arrFoundList.push(_refAddFiles.fileList[j].name);
+							_refAddFiles.fileList.splice(j, 1);
+							j--;
+						}
+
+				if (_refAddFiles.fileList.length >= 1)
+				{
+					for (var k:Number = 0; k < _refAddFiles.fileList.length; k++)
+						_arrUploadFiles.push(
+							{
+								name:_refAddFiles.fileList[k].name,
+								size:formatFileSize(_refAddFiles.fileList[k].size),
+								file:_refAddFiles.fileList[k]
+							});
+
+					listFiles.dataProvider = _arrUploadFiles;
+					listFiles.selectedIndex = _arrUploadFiles.length - 1;
+				}
+
+				if (arrFoundList.length >= 1)
+					DNotificator.showInfo(StrConsts.getRMString(60) + ": \n\n• " + arrFoundList.join("\n• ") + "\n\n..." + StrConsts.getRMString(61));
+
+				updateProgBar();
+				scrollFiles();
+				uploadCheck();
+				cancelFileSelection();
+			}
+
+			private function formatFileSize(numSize:Number):String
+			{
+				var strReturn:String;
+				numSize = Number(numSize / 1000);
+				strReturn = String(numSize.toFixed(1) + " KB");
+
+				if (numSize > 1000)
+				{
+					numSize = numSize / 1000;
+					strReturn = String(numSize.toFixed(1) + " MB");
+
+					if (numSize > 1000)
+					{
+						numSize = numSize / 1000;
+						strReturn = String(numSize.toFixed(1) + " GB");
+					}
+				}
+
+				return strReturn;
+			}
+
+			private function cancelFileSelection(event:Event=null):void
+			{
+				_refAddFiles.removeEventListener(Event.SELECT, onSelectFile);
+				_refAddFiles.removeEventListener(Event.CANCEL, cancelFileSelection);
+				_refAddFiles = null;
+			}
+
+			//------------------------------------------------------------------
+			// Upload process:
+
+			private function startUpload():void
+			{
+				if (_arrUploadFiles.length > 0)
+				{
+					disableUI();
+
+					listFiles.selectedIndex = _numCurrentUpload;
+
+					scrollFiles();
+
+					const postVars:URLVariables = new URLVariables();
+					postVars.enterprise = DSession._tenant;
+					postVars.destination = _destination;
+
+					const request:URLRequest = new URLRequest();
+					request.data = postVars;
+					request.method = URLRequestMethod.POST;
+
+					if (!_applicationDomain)
+						_applicationDomain = DSession._applicationDomain;
+
+				    request.url = _applicationDomain + StrConsts._CHAR_FORWARD_SLASH + (_servletName ? _servletName : _DEFAULT_SERVLET_NAME);
+
+					if (listFiles.selectedItem)
+					{
+						_refUploadFile = new FileReference();
+						_refUploadFile = listFiles.selectedItem.file;
+						_refUploadFile.addEventListener(ProgressEvent.PROGRESS, onUploadProgress, false, 0, true);
+						_refUploadFile.addEventListener(Event.COMPLETE, onUploadComplete, false, 0, true);
+						_refUploadFile.addEventListener(DataEvent.UPLOAD_COMPLETE_DATA, onServletOutArrives, false, 0, true);
+						_refUploadFile.addEventListener(IOErrorEvent.IO_ERROR, onUploadIoError, false, 0, true);
+						_refUploadFile.addEventListener(SecurityErrorEvent.SECURITY_ERROR, onUploadSecurityError, false, 0, true);
+						_refUploadFile.upload(request, "file", false);
+					}
+					else
+						DNotificator.showInfo(StrConsts.getRMString(90));
+				}
+			}
+
+			private function onUploadProgress(event:ProgressEvent):void
+			{
+				updateProgBar(Math.round((event.bytesLoaded / event.bytesTotal) * 100));
+				dispatchEvent(new ProgressEvent(DUploadDownloadEvent._ON_UPLOAD_PROGRESS, false, false, event.bytesLoaded, event.bytesTotal));
+			}
+
+			private function updateProgBar(numPerc:Number = 0):void
+			{
+				var strLabel:String = (_numCurrentUpload + 1) + "/" + _arrUploadFiles.length;
+				strLabel = (_numCurrentUpload + 1 <= _arrUploadFiles.length && numPerc > 0 && numPerc < 100) ? numPerc + "% - " + strLabel : strLabel;
+				strLabel = (_numCurrentUpload + 1 == _arrUploadFiles.length && numPerc == 100) ? StrConsts.getRMString(59) + " - " + strLabel : strLabel;
+				strLabel = (_arrUploadFiles.length == 0) ? StrConsts._CHAR_EMPTY_STRING : strLabel;
+				progBar.label = strLabel;
+				progBar.setProgress(numPerc, 100);
+				progBar.validateNow();
+			}
+
+			private function onUploadComplete(event:Event):void
+			{
+				trace(" ### DFileUploader.onUploadComplete: " + event);
+			}
+
+			private function onServletOutArrives(event:DataEvent):void
+			{
+				const resultText:String = event.data;
+
+				if (resultText)
+				{
+					if (resultText == "1")
+					{
+						_numCurrentUpload++;
+
+						if (_numCurrentUpload < _arrUploadFiles.length)
+							startUpload();
+						else
+						{
+							clean();
+							DNotificator.showInfo(StrConsts.getRMString(145));
+							dispatchEvent(new Event(DUploadDownloadEvent._ON_UPLOAD_COMPLETE));
+						}
+					}
+					else
+					{
+						if (resultText.indexOf("DGUIErrorCodeException") == 0)
+						{
+							cancelUploads();
+
+							const regExpMatches:Array = new RegExp("DGUIErrorCodeException\\((\\d+)\\)", "is").exec(resultText);
+							const errorCode:String = regExpMatches[1];
+							DNotificator.showError2(StrConsts.getRMErrorString(errorCode) + ".\n\n" + StrConsts.getRMString(3) + ".");
+
+							dispatchEvent(new Event(DUploadDownloadEvent._ON_UPLOAD_DGUIERROR));
+						}
+					}
+				}
+			}
+
+			private function onUploadIoError(event:IOErrorEvent):void
+			{
+				cancelUploads();
+				DNotificator.showError2(StrConsts.getRMErrorString("500191"));
+//				dispatchEvent(new IOErrorEvent(DUploadDownloadEvent._ON_UPLOAD_IO_ERROR, false, false, event.text));
+			}
+
+			private function onUploadSecurityError(event:SecurityErrorEvent):void
+			{
+				cancelUploads();
+				DNotificator.showError2(StrConsts.getRMErrorString("500192"));
+//				dispatchEvent(new SecurityErrorEvent(DUploadDownloadEvent._ON_UPLOAD_SECURITY_ERROR, false, false, event.text));
+			}
+
+			//------------------------------------------------------------------
+			// Private generic interface:
+
+			private function removeFiles():void
+			{
+				const arrSelected:Array = listFiles.selectedIndices;
+
+				if (arrSelected.length >= 1)
+				{
+					for (var i:Number = 0; i < arrSelected.length; i++)
+						_arrUploadFiles[Number(arrSelected[i])] = null;
+
+					for (var j:Number = 0; j < _arrUploadFiles.length; j++)
+						if (_arrUploadFiles[j] == null)
+						{
+							_arrUploadFiles.splice(j, 1);
+							j--;
+						}
+
+					listFiles.dataProvider = _arrUploadFiles;
+					listFiles.selectedIndex = 0;
+				}
+
+				updateProgBar();
+				scrollFiles();
+				uploadCheck();
+			}
+
+			private function uploadCheck():void
+			{
+				if (_arrUploadFiles.length == 0)
+				{
+					btnUpload.enabled = false;
+					listFiles.verticalScrollPolicy = "off";
+				}
+				else
+				{
+					btnUpload.enabled = true;
+					listFiles.verticalScrollPolicy = "on";
+				}
+			}
+
+			private function scrollFiles():void
+			{
+				listFiles.verticalScrollPosition = listFiles.selectedIndex;
+				listFiles.validateNow();
+			}
+
+			private function disableUI():void
+			{
+				btnAdd.enabled = false;
+				btnRemove.enabled = false;
+				btnUpload.enabled = false;
+				btnCancel.enabled = true;
+				listFiles.enabled = false;
+				listFiles.verticalScrollPolicy = "off";
+			}
+
+			private function enableUI():void
+			{
+				btnAdd.enabled = true;
+				btnRemove.enabled = true;
+				btnUpload.enabled = true;
+				btnCancel.enabled = false;
+				listFiles.enabled = true;
+				listFiles.verticalScrollPolicy = "on";
+			}
+
+			//------------------------------------------------------------------
+		]]>
+	</mx:Script>
+
+	<mx:states>
+		<mx:State id="mini" name="mini">
+			<mx:SetProperty name="height" value="60" />
+			<mx:SetProperty name="minHeight" value="60" />
+			<mx:SetStyle target="{btnView}" name="icon" value="@Embed('assets/image/component/fileUpload/application_put.png')" />
+		</mx:State>
+	</mx:states>
+
+	<mx:transitions>
+		<mx:Transition fromState="*" toState="*">
+			<mx:Resize target="{this}" duration="450" />
+		</mx:Transition>
+	</mx:transitions>
+
+	<mx:Canvas width="100%" height="100%">
+		<mx:DataGrid
+			id="listFiles"
+			left="0" top="0" bottom="0" right="0"
+			allowMultipleSelection="true" draggableColumns="false" resizableColumns="false" sortableColumns="false"
+			verticalScrollPolicy="on">
+			<mx:columns>
+				<mx:DataGridColumn headerText="{StrConsts.getRMString(62)}" dataField="name" wordWrap="true" />
+				<mx:DataGridColumn headerText="{StrConsts.getRMString(63)}" dataField="size" width="75" textAlign="right" />
+			</mx:columns>
+		</mx:DataGrid>
+	</mx:Canvas>
+
+	<!-- TODO: Remove MXML event listeners. -->
+	<mx:ControlBar horizontalAlign="center" verticalAlign="middle">
+		<mx:Button id="btnAdd" toolTip="{StrConsts.getRMString(64)}" click="addFiles()" icon="@Embed('assets/image/component/fileUpload/add.png')" width="26" />
+		<mx:Button id="btnRemove" toolTip="{StrConsts.getRMString(65)}" click="removeFiles()" icon="@Embed('assets/image/component/fileUpload/delete.png')" width="26" />
+		<mx:ProgressBar id="progBar" mode="manual" label="" labelPlacement="center" width="100%" />
+		<mx:Button id="btnCancel" toolTip="{StrConsts.getRMString(66)}" icon="@Embed('assets/image/component/fileUpload/cancel2.png')" width="26" click="cancelUploads()" />
+		<mx:Button label="{StrConsts.getRMString(69)}" toolTip="{StrConsts.getRMString(67)}" id="btnUpload" click="startUpload()" icon="@Embed('assets/image/component/fileUpload/bullet_go.png')" />
+		<mx:Button id="btnView" toolTip="{StrConsts.getRMString(68)}" icon="@Embed('assets/image/component/fileUpload/application_get.png')" width="26" click="toggleMiniAndCompleteMode()" />
+	</mx:ControlBar>
+
+</mx:Panel>

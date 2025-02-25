@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Skin
+	xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:s="library://ns.adobe.com/flex/spark"
+	xmlns:input="br.com.dannemann.gui.component.input.*"
+	alpha.disabled=".5">
+
+	<fx:Metadata>
+		<![CDATA[
+			[HostComponent("br.com.dannemann.gui.component.input.DTextInputAutoComplete")]
+		]]>
+	</fx:Metadata>
+
+	<s:states>
+		<s:State name="normal" />
+		<s:State name="open" />
+		<s:State name="disabled" />
+	</s:states>
+
+	<s:PopUpAnchor
+		id="popUp"
+		displayPopUp="false"
+		popUpPosition="above">
+		<s:Group id="dropDown" minHeight="22" width="100%">
+			<input:DTextInputAutoCompleteList id="list" width="200" minWidth="22" />
+		</s:Group>
+	</s:PopUpAnchor>
+	<s:TextInput id="inputTextDTextInputAutoComplete" bottom="0" left="0" right="0" top="0" />
+</s:Skin>

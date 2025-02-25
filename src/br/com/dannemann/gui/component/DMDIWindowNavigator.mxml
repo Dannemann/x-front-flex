@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<container:DHGroup xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:mx="library://ns.adobe.com/flex/mx"
+	xmlns:container="br.com.dannemann.gui.component.container.*"
+	_enableFadeEffectOnShow="false"
+	alpha=".3"
+	rollOver="dhgroup1_rollOverHandler(event)">
+	<fx:Declarations>
+		<s:Power id="power" exponent="4" />
+		<s:Scale id="scaleFocused" easer="{power}" duration="200" scaleXFrom="1.0" scaleXTo="1.5" scaleYFrom="1.0" scaleYTo="1.5" />
+		<s:Scale id="scaleUnfocused" easer="{power}" duration="200" scaleXFrom="1.5" scaleXTo="1.0" scaleYFrom="1.5" scaleYTo="1.0" />
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import br.com.dannemann.gui.component.container.DHGroup;
+			import br.com.dannemann.gui.component.container.mdi.containers.MDIWindow;
+			import br.com.dannemann.gui.component.container.mdi.managers.MDIManager;
+			import br.com.dannemann.gui.effect.DEffectFadeIn2;
+			import br.com.dannemann.gui.effect.DEffectFadeOut2;
+
+			import mx.core.FlexGlobals;
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Fields:
+
+			public var _navigationButtonsArr:Array;
+
+			private const _fadeIn:DEffectFadeIn2 = new DEffectFadeIn2(this);
+			private const _fadeOut:DEffectFadeOut2 = new DEffectFadeOut2(this);
+			private const _focusTimer:Timer = new Timer(2000, 1);
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Overrides:
+
+			//------------------------------------------------------------------
+			// Class overrides:
+
+			override protected function createChildren():void
+			{
+				super.createChildren();
+
+				focusEnabled = false;
+				tabChildren = false;
+				hasFocusableChildren = false;
+			}
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Public interface:
+
+			// TODO: MÉTODO NÃO ESTÁ CUIDANDO DA PERFORMANCE... IMPLEMENTAÇÃO RÁPIDA (MAIS LENTA EM TEMPO DE EXECUÇÃO) E SIMPLES!!!
+			public function updateNavigator():void
+			{
+				_navigationButtonsArr = [];
+
+				var i:int;
+
+				const windowList:Array = MDIManager.global.windowList;
+				const numberOfWindows:int = windowList.length;
+				var mdiWindow:MDIWindow;
+				var dLinkButton:DMDIWindowNavigatorButton;
+				for (i = 0; i < numberOfWindows; i++)
+				{
+					mdiWindow = windowList[i];
+
+					dLinkButton = new DMDIWindowNavigatorButton(mdiWindow);
+					dLinkButton.label = mdiWindow.title;
+					dLinkButton.addEventListener(MouseEvent.CLICK, dLinkButtonClicked, false, 0, true);
+					dLinkButton.addEventListener(MouseEvent.ROLL_OVER, dLinkButton_rollOverHandler, false, 0, true);
+
+					_navigationButtonsArr.push(dLinkButton);
+					_navigationButtonsArr[mdiWindow.toString()] = dLinkButton;
+				}
+
+				const navigationButtonsArrLength:int = _navigationButtonsArr.length;
+				// TODO: DEIXANDO "LISTENERS" NA MEMÓRIA!!!
+				/*var dMDIWindowNavigatorButton:DMDIWindowNavigatorButton;
+				for (i = numElements - 1; i >= 0; i--)
+				{
+					dMDIWindowNavigatorButton = removeElementAt(i) as DMDIWindowNavigatorButton;
+					dMDIWindowNavigatorButton.removeEventListener(MouseEvent.CLICK, dLinkButtonClicked);
+					dMDIWindowNavigatorButton.removeEventListener(MouseEvent.ROLL_OVER, dLinkButton_rollOverHandler);
+				}*/
+				removeAllElements();
+				for (i = 0; i < navigationButtonsArrLength; i++)
+					addElement(_navigationButtonsArr[i]);
+			}
+
+			public function next(currentFocusedMDIWindow:MDIWindow):void
+			{
+				const navigationButtonsArrLength:int = _navigationButtonsArr.length;
+
+				if (!currentFocusedMDIWindow)
+				{
+					if (navigationButtonsArrLength > 0)
+						setFocusOnMDIWindow((_navigationButtonsArr[0] as DMDIWindowNavigatorButton)._mdiWindowRelative);
+
+					return;
+				}
+
+				const nextIndex:int = _navigationButtonsArr.indexOf(_navigationButtonsArr[currentFocusedMDIWindow.toString()] as DMDIWindowNavigatorButton) + 1;
+				var mdiWindowRelative:MDIWindow;
+
+				if (nextIndex <= navigationButtonsArrLength - 1)
+					mdiWindowRelative = (_navigationButtonsArr[nextIndex] as DMDIWindowNavigatorButton)._mdiWindowRelative;
+				else if (nextIndex == navigationButtonsArrLength)
+					mdiWindowRelative = (_navigationButtonsArr[0] as DMDIWindowNavigatorButton)._mdiWindowRelative;
+
+				if (MDIManager.global.getOpenWindowList().length > 1)
+					if (mdiWindowRelative.minimized)
+						next(mdiWindowRelative);
+					else
+						setFocusOnMDIWindow(mdiWindowRelative);
+			}
+
+			public function setFocusOnMDIWindow(mdiWindow:MDIWindow):void
+			{
+				FlexGlobals.topLevelApplication.bringMDIWindowToFront(mdiWindow);
+			}
+
+			public function focusButton(currentFocusedMDIWindow:MDIWindow, scaleButton:Boolean=true):void
+			{
+				unfocusAll();
+				fadeIn();
+
+				if (scaleButton)
+				{
+					scaleFocused.target = _navigationButtonsArr[currentFocusedMDIWindow.toString()] as DMDIWindowNavigatorButton;
+					scaleFocused.play();
+				}
+
+				_focusTimer.stop();
+				_focusTimer.removeEventListener(TimerEvent.TIMER_COMPLETE, onTimerComplete);
+				_focusTimer.addEventListener(TimerEvent.TIMER_COMPLETE, onTimerComplete, false, 0, true);
+				_focusTimer.start();
+			}
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Private interface:
+
+			private function unfocusAll():void
+			{
+				const navigationButtonsArrLength:int = _navigationButtonsArr.length;
+				var dMDIWindowNavigatorButton:DMDIWindowNavigatorButton;
+				for (var i:int = 0; i < navigationButtonsArrLength; i++)
+				{
+					dMDIWindowNavigatorButton = _navigationButtonsArr[i];
+
+					if (dMDIWindowNavigatorButton.scaleX == 1.5)
+					{
+						scaleUnfocused.target = dMDIWindowNavigatorButton;
+						scaleUnfocused.play();
+					}
+				}
+			}
+
+			private function onTimerComplete(event:TimerEvent):void
+			{
+				_focusTimer.removeEventListener(TimerEvent.TIMER_COMPLETE, onTimerComplete);
+
+				unfocusAll();
+				fadeOut();
+			}
+
+			private function dhgroup1_rollOverHandler(event:MouseEvent):void
+			{
+				fadeIn();
+			}
+
+			private function dLinkButtonClicked(event:MouseEvent):void
+			{
+				focusManager.deactivate();
+				FlexGlobals.topLevelApplication.bringMDIWindowToFront((event.currentTarget as DMDIWindowNavigatorButton)._mdiWindowRelative, false);
+			}
+
+			private function dLinkButton_rollOverHandler(event:MouseEvent):void
+			{
+				focusButton((event.currentTarget as DMDIWindowNavigatorButton)._mdiWindowRelative, false);
+			}
+
+			private function fadeIn():void
+			{
+				//if (alpha == 0.296875) // TODO: NECESSITA AINDA???
+				if (alpha != 1)
+					_fadeIn.play();
+			}
+
+			private function fadeOut():void
+			{
+				if (alpha == 1)
+					_fadeOut.play();
+			}
+
+			//------------------------------------------------------------------
+		]]>
+	</fx:Script>
+</container:DHGroup>

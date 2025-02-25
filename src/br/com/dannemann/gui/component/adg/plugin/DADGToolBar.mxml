@@ -1,0 +1,746 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:mx="library://ns.adobe.com/flex/mx"
+	xmlns:component="br.com.dannemann.gui.component.*"
+	implements="br.com.dannemann.gui.component.DComponent">
+
+	<fx:Metadata>
+		[Event(name="onChangingToTreeMode", type="br.com.dannemann.gui.event.DADGToolBarEvent")]
+		[Event(name="onExitTreeMode", type="br.com.dannemann.gui.event.DADGToolBarEvent")]
+	</fx:Metadata>
+
+	<s:states>
+		<s:State id="stateNormal" name="stateNormal" />
+		<s:State id="stateTree" name="stateTree" />
+		<s:State id="stateGrouping" name="stateGrouping" />
+		<s:State id="stateGrouped" name="stateGrouped" />
+	</s:states>
+
+	<s:layout>
+		<s:VerticalLayout gap="0" paddingBottom="0" paddingLeft="0" paddingRight="0" paddingTop="0"  />
+	</s:layout>
+
+	<fx:Script>
+		<![CDATA[
+			import br.com.dannemann.gui.domain.StrConsts;
+			import br.com.dannemann.gui.component.DComponent;
+			import br.com.dannemann.gui.bean.FieldDescriptorBean;
+			import br.com.dannemann.gui.component.DCrudToolbar;
+			import br.com.dannemann.gui.component.DLabel;
+			import br.com.dannemann.gui.component.DNotificator;
+			import br.com.dannemann.gui.component.adg.DADG;
+			import br.com.dannemann.gui.component.input.DCheckBox;
+			import br.com.dannemann.gui.controller.EntityDescriptor;
+			import br.com.dannemann.gui.controller.ServerVarsDecoder;
+			import br.com.dannemann.gui.custom.DCustomLabelFunctionADG;
+			import br.com.dannemann.gui.effect.DEffectFadeIn2;
+			import br.com.dannemann.gui.effect.DEffectFadeOut2;
+			import br.com.dannemann.gui.event.DADGToolBarEvent;
+			import br.com.dannemann.gui.labelFunction.adg.DLabelFBooleanToGender;
+			import br.com.dannemann.gui.labelFunction.adg.DLabelFBooleanToYesNo;
+			import br.com.dannemann.gui.library.DIconLibrary;
+			import br.com.dannemann.gui.util.DUtilDescriptor;
+			import br.com.dannemann.gui.util.DUtilFocus;
+			import br.com.dannemann.gui.util.DUtilImage;
+			import br.com.dannemann.gui.util.DUtilMouseCursor;
+			
+			import flashx.textLayout.conversion.TextConverter;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.ArrayList;
+			import mx.collections.Grouping;
+			import mx.collections.GroupingCollection2;
+			import mx.collections.GroupingField;
+			import mx.collections.ICollectionView;
+			import mx.containers.Grid;
+			import mx.containers.GridItem;
+			import mx.containers.GridRow;
+			import mx.containers.HBox;
+			import mx.containers.TitleWindow;
+			import mx.core.FlexGlobals;
+			import mx.core.UIComponent;
+			import mx.core.mx_internal;
+			import mx.events.StateChangeEvent;
+			import mx.managers.PopUpManager;
+			
+			import spark.components.CheckBox;
+			import spark.components.Group;
+			import spark.components.VGroup;
+			import spark.effects.Scale;
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Fields:
+
+			public var _dADG:DADG;
+			public var _entityBeanDescriptorsHandler:EntityDescriptor;
+			public var _dCRUDToolBar:DCrudToolbar;
+			public var _excludeFromTableMode:Vector.<UIComponent>;
+			public var _disableFromTableMode:Vector.<UIComponent>;
+			public var _numberOfGridColumnsOnGroupByPopUp:int = 3; // Number of columns on group by pop up.
+
+			// Group by mode.
+
+			private var _groupByTitleWindowPopUp:TitleWindow; // The pop up. Just the controller container. Created on runtime.
+			private var _groupByTitleWindowPopUpIsOnStage:Boolean;
+			private var _groupByPopUpContent:VGroup;
+			private var _groupByCheckBoxesInstances:Vector.<CheckBox>;
+			private var _selectedCheckboxesArray:ArrayList; // Only the selected checkboxes for grouping array collection.
+			private var _otherOptsHolder:HBox;
+			private var _cleanLabel:DLabel;
+			private var _openAll:DLabel;
+			private var _closeAll:DLabel;
+
+			// Expand behavior.
+
+			private var _isOnTableMode:Boolean; // Not a mode, a sub-mode let's say.
+
+			// Control.
+
+			private var _lastFlatDataProvider:Object;
+
+			// Others:
+
+			private const _dEffectFadeIn2:DEffectFadeIn2 = new DEffectFadeIn2();
+			private const _dEffectFadeOut2:DEffectFadeOut2 = new DEffectFadeOut2();
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Overrides:
+
+			//------------------------------------------------------------------
+			// Class Overrides:
+
+			override public function set initialized(value:Boolean):void
+			{
+				super.initialized = value;
+
+				if (value)
+				{
+					addEventListener(StateChangeEvent.CURRENT_STATE_CHANGING, changingCurrentStateManager, false, 0, true);
+
+					_treeImage.addEventListener(MouseEvent.CLICK, actionTreeMode, false, 0, true);
+					_treeImage.addEventListener(MouseEvent.ROLL_OVER, onMouseOver, false, 0, true);
+					_treeImage.addEventListener(MouseEvent.ROLL_OUT, onMouseOut, false, 0, true);
+
+					_groupImage.addEventListener(MouseEvent.CLICK, actionOpenGroupByPopUp, false, 0, true);
+					_groupImage.addEventListener(MouseEvent.ROLL_OVER, onMouseOver, false, 0, true);
+					_groupImage.addEventListener(MouseEvent.ROLL_OUT, onMouseOut, false, 0, true);
+
+					_tableModeImage.addEventListener(MouseEvent.CLICK, actionExpandADG, false, 0, true);
+					_tableModeImage.addEventListener(MouseEvent.ROLL_OVER, onMouseOver, false, 0, true);
+					_tableModeImage.addEventListener(MouseEvent.ROLL_OUT, onMouseOut, false, 0, true);
+
+					_filtersRemove.addEventListener(MouseEvent.CLICK, actionRemoveFilters, false, 0, true);
+					_filtersRemove.addEventListener(MouseEvent.ROLL_OVER, onMouseOver, false, 0, true);
+					_filtersRemove.addEventListener(MouseEvent.ROLL_OUT, onMouseOut, false, 0, true);
+
+					createGroupByTitleWinPopUpContent();
+				}
+			}
+
+			override protected function createChildren():void
+			{
+				super.createChildren();
+
+				var removedTreeImage:Boolean = false;
+				var removedGroupImage:Boolean = false;
+				var removedTableModeImage:Boolean = false;
+				var removedFiltersRemoveImage:Boolean = false;
+
+				if (!_entityBeanDescriptorsHandler._fieldDescriptorFKHolderFor)
+				{
+					_toolBar.removeElement(_treeImage);
+					removedTreeImage = true;
+				}
+
+				const groupByFieldDescriptors:Vector.<FieldDescriptorBean> = _entityBeanDescriptorsHandler._groupByFieldDescriptors;
+				if (!(groupByFieldDescriptors && groupByFieldDescriptors.length > 0))
+				{
+					_toolBar.removeElement(_groupImage);
+					removedGroupImage = true;
+				}
+
+				if ((!(_excludeFromTableMode && _excludeFromTableMode.length > 0)) && (!(_disableFromTableMode && _disableFromTableMode.length > 0)))
+				{
+					_toolBar.removeElement(_tableModeSeparator);
+					_toolBar.removeElement(_tableModeImage);
+					removedTableModeImage = true;
+				}
+				else
+				{
+					if (removedTreeImage && removedGroupImage)
+						_toolBar.removeElement(_tableModeSeparator);
+				}
+
+				if (!_dADG._isFiltered)
+				{
+					_toolBar.removeElement(_filtersRemoveSeparator);
+					_toolBar.removeElement(_filtersRemove);
+					removedFiltersRemoveImage = true;
+				}
+				else
+				{
+					if (removedTreeImage && removedGroupImage && removedTableModeImage)
+						_toolBar.removeElement(_filtersRemoveSeparator);
+				}
+			}
+
+			override public function setFocus():void
+			{
+				DUtilFocus.setFocusForcingIndicator(_dADG);
+			}
+
+			//----------------------------------------------------------------------
+			// DIGUI implementation:
+
+			public function dispose():void
+			{
+				if (_groupByTitleWindowPopUp && _groupByTitleWindowPopUp.mx_internal::closeButton)
+					_groupByTitleWindowPopUp.mx_internal::closeButton.removeEventListener(MouseEvent.CLICK, actionCloseGroupByPopUp);
+
+				actionCloseGroupByPopUp();
+
+				removeEventListener(StateChangeEvent.CURRENT_STATE_CHANGING, changingCurrentStateManager);
+
+				_treeImage.removeEventListener(MouseEvent.CLICK, actionTreeMode);
+				_treeImage.removeEventListener(MouseEvent.ROLL_OVER, onMouseOver);
+				_treeImage.removeEventListener(MouseEvent.ROLL_OUT, onMouseOut);
+
+				_groupImage.removeEventListener(MouseEvent.CLICK, actionOpenGroupByPopUp);
+				_groupImage.removeEventListener(MouseEvent.ROLL_OVER, onMouseOver);
+				_groupImage.removeEventListener(MouseEvent.ROLL_OUT, onMouseOut);
+
+				_tableModeImage.removeEventListener(MouseEvent.CLICK, actionExpandADG);
+				_tableModeImage.removeEventListener(MouseEvent.ROLL_OVER, onMouseOver);
+				_tableModeImage.removeEventListener(MouseEvent.ROLL_OUT, onMouseOut);
+
+				_filtersRemove.removeEventListener(MouseEvent.CLICK, actionRemoveFilters);
+				_filtersRemove.removeEventListener(MouseEvent.ROLL_OVER, onMouseOver);
+				_filtersRemove.removeEventListener(MouseEvent.ROLL_OUT, onMouseOut);
+
+				if (_groupByCheckBoxesInstances)
+				{
+					_cleanLabel.removeEventListener(MouseEvent.CLICK, cleanInputs);
+					_openAll.removeEventListener(MouseEvent.CLICK, onOpenAllNodes);
+					_closeAll.removeEventListener(MouseEvent.CLICK, onCloseAllNodes);
+
+					const groupByCheckBoxesInstancesLength:int = _groupByCheckBoxesInstances.length;
+					for (var i:int = 0; i < groupByCheckBoxesInstancesLength; i++)
+						_groupByCheckBoxesInstances[i].removeEventListener(MouseEvent.CLICK, checkBoxGroupByClicked);
+				}
+
+				_dADG = null;
+			}
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Initializations:
+
+			private function changingCurrentStateManager(event:StateChangeEvent):void
+			{
+				DUtilImage.removeAllFilters(_treeImage)
+				_treeImage.enabled = false;
+				_groupImage.enabled = false;
+
+				if (event.oldState == stateTree.name)
+				{
+					if (_dCRUDToolBar._dLinkButtonSearch)
+						_dCRUDToolBar._dLinkButtonSearch.enabled = true;
+
+					dispatchEvent(new DADGToolBarEvent(DADGToolBarEvent._ON_EXIT_TREE_MODE));
+				}
+
+				if (event.newState == stateNormal.name)
+				{
+					_treeImage.enabled = true;
+					_groupImage.enabled = true;
+
+					_dADG.dataProvider = _lastFlatDataProvider;
+					_dADG.validateNow();
+					updateNumberOfEntriesLabel(_lastFlatDataProvider.length);
+					_dADG.updateColumnFilterFunctions();
+
+					if (_dCRUDToolBar)
+						_dCRUDToolBar.enabled = true;
+				}
+				else if (event.newState == stateGrouping.name)
+				{
+					if (_dCRUDToolBar)
+					{
+						_dCRUDToolBar.enabled = false;
+						_dCRUDToolBar.changeToSearchMode();
+					}
+				}
+				else if (event.newState == stateTree.name)
+				{
+					dispatchEvent(new DADGToolBarEvent(DADGToolBarEvent._ON_CHANGING_TO_TREE_MODE));
+
+					if (_dCRUDToolBar)
+					{
+						if (_dCRUDToolBar._dLinkButtonSearch)
+							_dCRUDToolBar._dLinkButtonSearch.enabled = false;
+					}
+					else
+						throw new Error(" ### DAdvancedDataGrid.mountTree: Para utilizar esta funcionalidade, é necessário informar um objeto DCRUDToolBar préviamente configurado.");
+
+					_dADG.dataProvider = new ArrayCollection();
+					_lastFlatDataProvider = new ArrayCollection();
+
+					if (_groupByTitleWindowPopUpIsOnStage)
+						actionCloseGroupByPopUp();
+
+					mountTree();
+
+					_treeImage.enabled = true;
+					DUtilImage.filterRed(_treeImage);
+				}
+				else if (event.newState == stateGrouped.name)
+					_groupImage.enabled = true;
+			}
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Public interface:
+
+			// Actions:
+
+			public function actionTreeMode(event:Event):void
+			{
+				if (currentState == stateTree.name)
+				{
+					currentState = stateNormal.name;
+					_dCRUDToolBar.cleanAllInputs();
+				}
+				else
+					currentState = stateTree.name;
+			}
+
+			public function actionOpenGroupByPopUp(event:Event):void
+			{
+				if (_dADG.dataProvider && ((_dADG.dataProvider as ICollectionView).length > 0))
+				{
+					if (!_groupByTitleWindowPopUp)
+					{
+						_groupByTitleWindowPopUp = PopUpManager.createPopUp(FlexGlobals.topLevelApplication as DisplayObject, TitleWindow) as TitleWindow;
+						_groupByTitleWindowPopUp.showCloseButton = true;
+						_groupByTitleWindowPopUp.title = StrConsts.getRMString(52);
+						_groupByTitleWindowPopUp.titleIcon = StrConsts._IMG_GROUP_BY;
+						_groupByTitleWindowPopUp.addElement(_groupByPopUpContent);
+						_groupByTitleWindowPopUp.mx_internal::closeButton.addEventListener(MouseEvent.CLICK, actionCloseGroupByPopUp, false, 0, true);
+						DUtilMouseCursor.moveComponentToMouse(_groupByTitleWindowPopUp);
+					}
+					else if (_groupByTitleWindowPopUp && !_groupByTitleWindowPopUpIsOnStage)
+						PopUpManager.addPopUp(_groupByTitleWindowPopUp, FlexGlobals.topLevelApplication as DisplayObject);
+					else
+						PopUpManager.bringToFront(_groupByTitleWindowPopUp);
+
+					_groupByTitleWindowPopUpIsOnStage = true;
+				}
+				else if (_groupByTitleWindowPopUpIsOnStage)
+					PopUpManager.bringToFront(_groupByTitleWindowPopUp);
+				else
+					DNotificator.showInfo(StrConsts.getRMString(53));
+			}
+
+			public function cleanInputs(event:Event=null):void
+			{
+				if (_groupByCheckBoxesInstances)
+				{
+					const groupByCheckBoxesInstancesLength:int = _groupByCheckBoxesInstances.length;
+					for (var i:int = 0; i < groupByCheckBoxesInstancesLength; i++)
+						_groupByCheckBoxesInstances[i].selected = false;
+
+					_selectedCheckboxesArray.removeAll();
+
+					if (_groupByPopUpContent.contains(_otherOptsHolder))
+						_groupByPopUpContent.removeElement(_otherOptsHolder);
+				}
+			}
+
+			public function reset(event:Event=null):void
+			{
+				cleanInputs(event);
+
+				if (_dCRUDToolBar)
+					_dCRUDToolBar.changeToSearchMode();
+
+				currentState = stateNormal.name;
+			}
+
+			public function actionHideGroupByPopUp():void
+			{
+				if (_groupByTitleWindowPopUpIsOnStage)
+					_groupByTitleWindowPopUp.visible = false;
+			}
+
+			public function actionRestoreGroupByPopUp():void
+			{
+				if (_groupByTitleWindowPopUpIsOnStage)
+					_groupByTitleWindowPopUp.visible = true;
+			}
+
+			public function actionCloseGroupByPopUp(event:Event=null):void
+			{
+				if (_groupByTitleWindowPopUpIsOnStage)
+				{
+					reset();
+
+					PopUpManager.removePopUp(_groupByTitleWindowPopUp);
+					_groupByTitleWindowPopUpIsOnStage = false;
+				}
+			}
+
+			public function actionExpandADG(event:MouseEvent):void
+			{
+				if (_isOnTableMode)
+				{
+					tableModeOFF();
+					_isOnTableMode = false;
+				}
+				else
+				{
+					tableModeON();
+					_isOnTableMode = true;
+				}
+			}
+
+			public function actionRemoveFilters(event:MouseEvent):void
+			{
+				_dADG.cleanFilters();
+			}
+
+			public function updateNumberOfEntriesLabel(dataProviderLength:int):void
+			{
+				if (_numberOfEntriesLabel)
+				{
+					if (dataProviderLength == 0)
+						_numberOfEntriesLabel.text = StrConsts.getRMString(122);
+					else if (dataProviderLength == 1)
+						_numberOfEntriesLabel.textFlow = TextConverter.importToFlow("<B>1</B> " + StrConsts.getRMString(124).toLowerCase(), TextConverter.TEXT_FIELD_HTML_FORMAT);
+					else if (dataProviderLength > 1)
+						_numberOfEntriesLabel.textFlow = TextConverter.importToFlow("<B>" + dataProviderLength +"</B> " + StrConsts.getRMString(123).toLowerCase(), TextConverter.TEXT_FIELD_HTML_FORMAT);
+				}
+			}
+
+			public function updateNumberOfEntriesLabelToLoading():void
+			{
+				if (_numberOfEntriesLabel)
+					_numberOfEntriesLabel.textFlow = TextConverter.importToFlow("<B><FONT COLOR='#B22222'>" + StrConsts.getRMString(9) + "...</FONT></B>", TextConverter.TEXT_FIELD_HTML_FORMAT);
+			}
+
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			//------------------------------------------------------------------
+			// Private interface:
+
+			//------------------------------------------------------------------
+			// Tree mode:
+
+			private function mountTree():void
+			{
+				if (_dCRUDToolBar)
+					_dCRUDToolBar.actionSearchAll();
+				else
+				{
+
+				}
+			}
+
+			//------------------------------------------------------------------
+			// Group mode:
+
+			private function createGroupByTitleWinPopUpContent():void
+			{
+				const _groupByFieldDescriptors:Vector.<FieldDescriptorBean> = _entityBeanDescriptorsHandler._groupByFieldDescriptors;
+
+				if (_groupByFieldDescriptors)
+				{
+					_groupByPopUpContent = new VGroup();
+					_groupByCheckBoxesInstances = new Vector.<CheckBox>();
+					_selectedCheckboxesArray = new ArrayList();
+
+					var grid:Grid = new Grid();
+					var gridRow:GridRow = new GridRow();
+					var gridItem:GridItem;
+
+					var fieldDescriptor:FieldDescriptorBean;
+					var dCheckbox:DCheckBox;
+					var i:int;
+
+					const groupByFieldDescriptorsLength:int = _groupByFieldDescriptors.length;
+					for (i = 0; i < groupByFieldDescriptorsLength; i++)
+					{
+						fieldDescriptor = _groupByFieldDescriptors[i];
+
+						if (i % _numberOfGridColumnsOnGroupByPopUp == 0)
+						{
+							grid.addElement(gridRow);
+							gridRow = new GridRow();
+						}
+
+						dCheckbox = new DCheckBox();
+						dCheckbox._defaultValue = fieldDescriptor; // TODO: "_defaultValue" acting like a DBeanFieldDescriptor handler.
+						dCheckbox.label = ServerVarsDecoder.replaceAllMessageDVars(fieldDescriptor._fieldNameFormatted);
+						dCheckbox.addEventListener(MouseEvent.CLICK, checkBoxGroupByClicked, false, 0, true);
+
+						_groupByCheckBoxesInstances.push(dCheckbox);
+
+						gridItem = new GridItem();
+						gridItem.addElement(dCheckbox);
+
+						gridRow.addElement(gridItem);
+					}
+
+					grid.addElement(gridRow);
+
+					if (i % _numberOfGridColumnsOnGroupByPopUp== 0)
+					{
+						grid.addElement(gridRow);
+						gridRow = new GridRow();
+					}
+
+					_cleanLabel = new DLabel(StrConsts.getRMString(55));
+					_cleanLabel.setStyle(StrConsts._FLEX_STYLE_PROPERTY_COLOR, StrConsts._FLEX_STYLE_VALUE_RED);
+					_cleanLabel.addEventListener(MouseEvent.CLICK, reset, false, 0, true);
+
+					gridItem = new GridItem();
+					gridItem.buttonMode = true;
+					gridItem.setStyle(StrConsts._FLEX_STYLE_PROPERTY_VERTICAL_ALIGN, StrConsts._FLEX_STYLE_VALUE_BOTTOM);
+					gridItem.addElement(_cleanLabel);
+
+					gridRow.addElement(gridItem);
+					grid.addElement(gridRow);
+
+					// Other options:
+					_openAll = new DLabel(StrConsts.getRMString(105));
+					_openAll.buttonMode = true;
+					_openAll.setStyle(StrConsts._FLEX_STYLE_PROPERTY_COLOR, StrConsts._COLOR_GREEN_OLD_MONEY);
+					// TODO: Dispose this:
+					_openAll.addEventListener(MouseEvent.CLICK, onOpenAllNodes, false, 0, true);
+
+					const dash:DLabel = new DLabel("- ");
+
+					_closeAll = new DLabel(StrConsts.getRMString(106));
+					_closeAll.buttonMode = true;
+					_closeAll.setStyle(StrConsts._FLEX_STYLE_PROPERTY_COLOR, StrConsts._COLOR_GREEN_OLD_MONEY);
+					// TODO: Dispose this:
+					_closeAll.addEventListener(MouseEvent.CLICK, onCloseAllNodes, false, 0, true);
+
+					_otherOptsHolder = new HBox();
+					_otherOptsHolder.addElement(_openAll);
+					_otherOptsHolder.addElement(dash);
+					_otherOptsHolder.addElement(_closeAll);
+
+					// Adding items:
+					_groupByPopUpContent.addElement(grid);
+					_groupByPopUpContent.addElement(_otherOptsHolder);
+					_groupByPopUpContent.removeElement(_otherOptsHolder);
+				}
+			}
+
+			private function checkBoxGroupByClicked(event:MouseEvent):void
+			{
+				if (_dADG.dataProvider && (_dADG.dataProvider.length > 0))
+				{
+					const checkBox:DCheckBox = event.currentTarget as DCheckBox;
+
+					if (checkBox.selected)
+						_selectedCheckboxesArray.addItem(checkBox);
+					else
+						_selectedCheckboxesArray.removeItemAt(_selectedCheckboxesArray.getItemIndex(checkBox));
+
+					if (_selectedCheckboxesArray.length == 0)
+						reset();
+					else
+						doGrouping();
+				}
+				else
+				{
+					(event.currentTarget as DCheckBox).selected = false;
+					DNotificator.showInfo(StrConsts.getRMString(53));
+				}
+			}
+
+			private function doGrouping():void
+			{
+				if ((_dADG.dataProvider) && (_dADG.dataProvider.length > 0))
+				{
+					if (currentState != stateGrouped.name)
+						_lastFlatDataProvider = _dADG.dataProvider.source;
+
+					currentState = stateGrouping.name;
+
+					const groupByGrouping:Grouping = new Grouping();
+					groupByGrouping.fields = [];
+
+					const _selectedCheckboxesArrayLength:int = _selectedCheckboxesArray.length;
+					var checkBoxFieldDescriptor:FieldDescriptorBean;
+					var groupingField:GroupingField;
+					for (var i:int = 0; i < _selectedCheckboxesArrayLength; i++)
+					{
+						checkBoxFieldDescriptor = (_selectedCheckboxesArray.getItemAt(i) as DCheckBox)._defaultValue as FieldDescriptorBean;
+						groupingField = new GroupingField(checkBoxFieldDescriptor._dataGridColumn, true, false, DUtilDescriptor.isNumericType(checkBoxFieldDescriptor));
+
+						if (checkBoxFieldDescriptor._customADGLabelFunction)
+						{
+							const customLB1:DCustomLabelFunctionADG = new (getDefinitionByName(checkBoxFieldDescriptor._customADGLabelFunction) as Class)() as DCustomLabelFunctionADG;
+							customLB1._dataField = checkBoxFieldDescriptor._javaField;
+							groupingField.groupingFunction = customLB1.myGroupingFunction;
+							groupByGrouping.fields.push(groupingField);
+						}
+						else if (checkBoxFieldDescriptor._isGender)
+						{
+							const booleanToGenderLF:DLabelFBooleanToGender = new DLabelFBooleanToGender();
+							booleanToGenderLF._dataField = checkBoxFieldDescriptor._javaField;
+							groupingField.groupingFunction = booleanToGenderLF.myGroupingFunction;
+							groupByGrouping.fields.push(groupingField);
+						}
+						else if (checkBoxFieldDescriptor._javaType == StrConsts._JAVA_TYPE_Boolean)
+						{
+							const booleanLabelFunc:DLabelFBooleanToYesNo = new DLabelFBooleanToYesNo();
+							booleanLabelFunc._dataField = checkBoxFieldDescriptor._javaField;
+							booleanLabelFunc._fieldNameFormatted = checkBoxFieldDescriptor._fieldNameFormatted;
+							groupingField.groupingFunction = booleanLabelFunc.myGroupingFunction;
+							groupByGrouping.fields.push(groupingField);
+						}
+						else if (checkBoxFieldDescriptor._groupByThisField)
+						{
+							const customLB2:DCustomLabelFunctionADG = new DCustomLabelFunctionADG();
+							customLB2._dataField = checkBoxFieldDescriptor._javaField;
+							groupingField.compareFunction = customLB2.mySortCompareFunction;
+							groupingField.groupingFunction = customLB2.myGroupingFunction;
+							groupByGrouping.fields.push(groupingField);
+						}
+					}
+
+					const groupByGroupingCollection2:GroupingCollection2 = new GroupingCollection2();
+					groupByGroupingCollection2.grouping = groupByGrouping;
+					groupByGroupingCollection2.source = _lastFlatDataProvider;
+					groupByGroupingCollection2.refresh();
+
+					_dADG.dataProvider = groupByGroupingCollection2;
+					_dADG.validateNow();
+					_dADG.expandAll();
+					_dADG.updateColumnFilterFunctions();
+
+					_groupByPopUpContent.addElement(_otherOptsHolder);
+
+					currentState = stateGrouped.name;
+				}
+				else
+					DNotificator.showInfo(StrConsts.getRMString(53));
+			}
+
+			public function onOpenAllNodes(event:MouseEvent):void
+			{
+				_dADG.validateNow();
+				_dADG.expandAll();
+			}
+
+			public function onCloseAllNodes(event:MouseEvent):void
+			{
+				_dADG.validateNow();
+				_dADG.collapseAll();
+			}
+
+			//------------------------------------------------------------------
+			// Expand advanced datagrid:
+
+			private function tableModeON():void
+			{
+				if (_excludeFromTableMode && _excludeFromTableMode.length > 0)
+				{
+					const excludeFromTableModeLength:int = _excludeFromTableMode.length;
+					var toExcludeComp:UIComponent;
+					for (var i:int = 0; i < excludeFromTableModeLength; i++)
+					{
+						toExcludeComp = _excludeFromTableMode[i];
+						toExcludeComp.enabled = false;
+						createScaleEffectAndPlay(0, toExcludeComp);
+					}
+				}
+
+				if (_disableFromTableMode && _disableFromTableMode.length > 0)
+				{
+					const disableFromTableModeLength:int = _disableFromTableMode.length;
+					for (i = 0; i < disableFromTableModeLength; i++)
+						_disableFromTableMode[i].enabled = false;;
+				}
+			}
+
+			private function tableModeOFF():void
+			{
+				var i:int = 0;
+
+				if (_excludeFromTableMode && _excludeFromTableMode.length > 0)
+				{
+					const excludeFromTableModeLength:int = _excludeFromTableMode.length;
+					var toExcludeComp:UIComponent;
+					for (i = 0; i < excludeFromTableModeLength; i++)
+					{
+						toExcludeComp = _excludeFromTableMode[i];
+						toExcludeComp.enabled = true;
+						createScaleEffectAndPlay(1, toExcludeComp);
+					}
+				}
+
+				if (_disableFromTableMode && _disableFromTableMode.length > 0)
+				{
+					const disableFromTableModeLength:int = _disableFromTableMode.length;
+					for (i = 0; i < disableFromTableModeLength; i++)
+						_disableFromTableMode[i].enabled = true;;
+				}
+			}
+
+			private function createScaleEffectAndPlay(scaleYTo:int, component:UIComponent):void
+			{
+				const scaleEffect:Scale = new Scale();
+				scaleEffect.duration = 0;
+				scaleEffect.scaleYTo = scaleYTo;
+				scaleEffect.target = component;
+				scaleEffect.play();
+			}
+
+			//------------------------------------------------------------------
+			// Event listeners:
+
+			// Images:
+
+			private function onMouseOver(event:MouseEvent):void
+			{
+				_dEffectFadeIn2.target = event.currentTarget;
+				_dEffectFadeIn2.play();
+			}
+
+			private function onMouseOut(event:MouseEvent):void
+			{
+				if (_dEffectFadeOut2)
+				{
+					_dEffectFadeOut2.target = event.currentTarget;
+					_dEffectFadeOut2.play();
+				}
+				else
+					_dEffectFadeOut2.end();
+			}
+
+			//------------------------------------------------------------------
+		]]>
+	</fx:Script>
+
+	<s:HGroup id="_toolBar" paddingBottom="2" paddingLeft="2" paddingRight="2" paddingTop="2" verticalAlign="middle" width="100%">
+		<component:DImage id="_treeImage" source="{StrConsts._IMG_TREE}" alpha=".3" toolTip="{StrConsts.getRMString(118)}" />
+		<component:DImage id="_groupImage" source="{StrConsts._IMG_GROUP_BY}" alpha=".3" toolTip="{StrConsts.getRMString(117)}" />
+		<s:BitmapImage id="_tableModeSeparator" source="{DIconLibrary.SEPARATOR}" alpha=".6" smooth="true" height="16" />
+		<component:DImage id="_tableModeImage" source="{StrConsts._IMG_TABLEADD}" alpha=".3" toolTip="{StrConsts.getRMString(116)}" />
+		<s:BitmapImage id="_filtersRemoveSeparator" source="{DIconLibrary.SEPARATOR}" alpha=".6" smooth="true" height="16" />
+		<component:DImage id="_filtersRemove" source="{DIconLibrary.FILTER_REMOVE}" alpha=".3" smoothBitmapContent="true" toolTip="{StrConsts.getRMString(115)}" />
+		<s:HGroup excludeFrom="stateGrouping, stateGrouped, stateTree" horizontalAlign="right" verticalAlign="middle" width="100%" height="100%">
+			<s:RichText id="_numberOfEntriesLabel" text="{StrConsts.getRMString(122)}" />
+		</s:HGroup>
+	</s:HGroup>
+
+</s:Group>
