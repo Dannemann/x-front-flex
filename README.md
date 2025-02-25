@@ -3,7 +3,7 @@ x-front-flex is a scaffolding framework I developed in ActionScript/Flex as the 
 Interactive table with multi-level grouping
 ![](screenshots/agrupamentoDeRegistros.png)
 
-Search on many-to-one associations
+Search on many-to-one associations with conditionals "and", "or", "like", etc
 ![](screenshots/buscaDeMuitosParaUm.png)
 
 Quick search on many-to-one associations
